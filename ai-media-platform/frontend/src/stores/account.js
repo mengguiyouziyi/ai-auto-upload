@@ -17,14 +17,31 @@ export const useAccountStore = defineStore('account', () => {
   const setAccounts = (accountsData) => {
     // 转换后端返回的数据格式为前端使用的格式
     accounts.value = accountsData.map(item => {
-      return {
-        id: item[0],
-        type: item[1],
-        filePath: item[2],
-        name: item[3],
-        status: item[4] === 1 ? '正常' : '异常',
-        platform: platformTypes[item[1]] || '未知',
-        avatar: '/vite.svg' // 默认使用vite.svg作为头像
+      // 处理两种可能的数据格式：数组格式（原始项目）和对象格式（当前实现）
+      if (Array.isArray(item)) {
+        // 原始项目的数组格式：[id, type, filePath, userName, status]
+        return {
+          id: item[0],
+          type: item[1],
+          filePath: item[2],
+          name: item[3],
+          userName: item[3],
+          status: item[4] === 1 ? '正常' : '异常',
+          platform: platformTypes[item[1]] || '未知',
+          avatar: '/vite.svg'
+        }
+      } else {
+        // 当前实现的对象格式
+        return {
+          id: item.id,
+          type: item.type,
+          filePath: item.filePath,
+          name: item.name || item.userName,
+          userName: item.userName || item.name,
+          status: (item.status === 1 || item.status === '正常') ? '正常' : '异常',
+          platform: item.platform || platformTypes[item.type] || '未知',
+          avatar: item.avatar || '/vite.svg'
+        }
       }
     })
   }

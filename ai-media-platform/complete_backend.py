@@ -18,6 +18,8 @@ import time
 import aiohttp
 from datetime import datetime
 from typing import Optional, Dict, Any
+from services.auth_service import batch_check_cookies
+from services.login_service import run_login_process, login_service
 from bs4 import BeautifulSoup
 from pathlib import Path
 import re
@@ -1228,71 +1230,6 @@ material_service = MaterialService()
 
 # ==================== 账号管理API ====================
 
-@app.get("/api/v1/accounts")
-async def get_all_accounts():
-    """获取所有账号"""
-    try:
-        accounts = await account_service.get_all_accounts()
-        return {
-            "success": True,
-            "data": {
-                "accounts": accounts,
-                "total": len(accounts)
-            }
-        }
-    except Exception as e:
-        print(f"获取账号列表失败: {str(e)}")
-        return {
-            "success": False,
-            "message": f"获取账号列表失败: {str(e)}"
-        }
-
-@app.get("/api/v1/accounts/{platform}")
-async def get_accounts_by_platform(platform: str):
-    """根据平台获取账号"""
-    try:
-        accounts = await account_service.get_accounts_by_platform(platform)
-        return {
-            "success": True,
-            "data": {
-                "accounts": accounts,
-                "platform": platform,
-                "total": len(accounts)
-            }
-        }
-    except Exception as e:
-        print(f"获取平台账号失败: {str(e)}")
-        return {
-            "success": False,
-            "message": f"获取平台账号失败: {str(e)}"
-        }
-
-@app.post("/api/v1/accounts")
-async def add_account(request: dict):
-    """添加新账号"""
-    try:
-        required_fields = ["platform", "username"]
-        for field in required_fields:
-            if not request.get(field):
-                return {
-                    "success": False,
-                    "message": f"缺少必填字段: {field}"
-                }
-
-        new_account = await account_service.add_account(request)
-        return {
-            "success": True,
-            "message": "账号添加成功",
-            "data": {
-                "account": new_account
-            }
-        }
-    except Exception as e:
-        print(f"添加账号失败: {str(e)}")
-        return {
-            "success": False,
-            "message": f"添加账号失败: {str(e)}"
-        }
 
 # ==================== 素材管理API ====================
 
@@ -1513,6 +1450,384 @@ async def get_video_file(filename: str):
             "success": False,
             "message": f"获取视频文件失败: {str(e)}"
         }
+
+# ============================================================================
+# 账号管理功能 - 兼容前端旧API格式
+# ============================================================================
+# 账号管理系统 - 完全兼容social-auto-upload
+# ============================================================================
+
+import sqlite3
+from pathlib import Path
+
+# 数据库路径
+ACCOUNT_DB_PATH = Path("./accounts.db")
+
+def init_account_db():
+    """初始化账号数据库"""
+    conn = sqlite3.connect(ACCOUNT_DB_PATH)
+    cursor = conn.cursor()
+
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS user_info (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        type INTEGER NOT NULL,
+        filePath TEXT NOT NULL,
+        userName TEXT NOT NULL,
+        status INTEGER DEFAULT 0
+    )
+    ''')
+
+    conn.commit()
+    conn.close()
+    print("✅ 账号数据库初始化完成")
+
+def get_platform_name(type_id):
+    """根据类型ID获取平台名称"""
+    type_map = {
+        1: "小红书",
+        2: "视频号",
+        3: "抖音",
+        4: "快手"
+    }
+    return type_map.get(type_id, "未知平台")
+
+def get_platform_type(platform_name):
+    """根据平台名称获取类型ID"""
+    platform_map = {
+        "小红书": 1,
+        "视频号": 2,
+        "抖音": 3,
+        "快手": 4
+    }
+    return platform_map.get(platform_name, 1)
+
+# 初始化数据库
+init_account_db()
+
+@app.get("/getValidAccounts")
+async def get_valid_accounts():
+    """获取有效账号列表 - 完全兼容social-auto-upload实现，包含Cookie验证"""
+    try:
+        with sqlite3.connect(ACCOUNT_DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM user_info')
+            rows = cursor.fetchall()
+
+            if not rows:
+                return {
+                    "code": 200,
+                    "msg": None,
+                    "data": []
+                }
+
+            print(f"\n📋 开始验证 {len(rows)} 个账号的Cookie有效性...")
+
+            # 转换为social-auto-upload格式的数组列表
+            accounts_for_validation = []
+            for row in rows:
+                accounts_for_validation.append([row[0], row[1], row[2], row[3], row[4]])
+
+            # 批量验证Cookie有效性
+            try:
+                updated_accounts = await batch_check_cookies(accounts_for_validation)
+                print("✅ Cookie验证完成")
+
+                # 更新数据库中的状态
+                for account in updated_accounts:
+                    account_id, platform_type, cookie_file, username, new_status = account
+                    cursor.execute('''
+                    UPDATE user_info
+                    SET status = ?
+                    WHERE id = ?
+                    ''', (new_status, account_id))
+                conn.commit()
+                print("✅ 数据库状态更新完成")
+
+            except Exception as cookie_error:
+                print(f"⚠️ Cookie验证失败，使用原始状态: {str(cookie_error)}")
+                # 如果Cookie验证失败，使用原始数据
+                updated_accounts = accounts_for_validation
+
+            # 转换为前端期望的格式，完全匹配social-auto-upload
+            frontend_data = []
+            for account in updated_accounts:
+                account_id, platform_type, cookie_file, username, status = account
+
+                account = {
+                    "id": account_id,
+                    "type": platform_type,
+                    "filePath": cookie_file,
+                    "userName": username,
+                    "status": status,
+                    # 前端兼容字段
+                    "name": username,  # userName作为name
+                    "platform": get_platform_name(platform_type),
+                    "avatar": f"https://api.dicebear.com/7.x/initials/svg?seed={username}"
+                }
+                frontend_data.append(account)
+
+            print(f"📊 返回 {len(frontend_data)} 个账号数据")
+            return {
+                "code": 200,
+                "msg": None,
+                "data": frontend_data
+            }
+    except Exception as e:
+        print(f"❌ 获取账号列表失败: {str(e)}")
+        return {
+            "code": 500,
+            "msg": f"获取账号列表失败: {str(e)}",
+            "data": None
+        }
+
+@app.post("/account")
+async def add_account(request: dict):
+    """添加账号 - 兼容social-auto-upload前端"""
+    try:
+        platform = request.get("platform", "")
+        name = request.get("name", "")
+
+        if not platform or not name:
+            return {
+                "code": 400,
+                "message": "平台和名称不能为空"
+            }
+
+        type_id = get_platform_type(platform)
+        file_path = f"cookies/{platform.lower()}_account_{name}.json"
+
+        with sqlite3.connect(ACCOUNT_DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO user_info (type, filePath, userName, status)
+                VALUES (?, ?, ?, ?)
+            ''', (type_id, file_path, name, 1))
+            conn.commit()
+
+            # 获取插入的ID
+            account_id = cursor.lastrowid
+
+        # 返回前端期望的格式
+        new_account = {
+            "id": account_id,
+            "type": type_id,
+            "filePath": file_path,
+            "userName": name,
+            "status": 1,
+            "name": name,
+            "platform": platform,
+            "avatar": f"https://api.dicebear.com/7.x/initials/svg?seed={name}"
+        }
+
+        return {
+            "code": 200,
+            "data": new_account,
+            "message": "账号添加成功"
+        }
+    except Exception as e:
+        print(f"添加账号失败: {str(e)}")
+        return {
+            "code": 500,
+            "message": f"添加账号失败: {str(e)}"
+        }
+
+@app.post("/updateUserinfo")
+async def update_account(request: dict):
+    """更新账号信息 - 完全兼容social-auto-upload"""
+    try:
+        user_id = request.get('id')
+        type = request.get('type')
+        userName = request.get('userName')
+
+        if not user_id:
+            return {
+                "code": 400,
+                "message": "账号ID不能为空"
+            }
+
+        with sqlite3.connect(ACCOUNT_DB_PATH) as conn:
+            cursor = conn.cursor()
+
+            # 构建更新语句
+            if type and userName:
+                cursor.execute('''
+                    UPDATE user_info
+                    SET type = ?, userName = ?
+                    WHERE id = ?
+                ''', (type, userName, user_id))
+            elif type:
+                cursor.execute('''
+                    UPDATE user_info
+                    SET type = ?
+                    WHERE id = ?
+                ''', (type, user_id))
+            elif userName:
+                cursor.execute('''
+                    UPDATE user_info
+                    SET userName = ?
+                    WHERE id = ?
+                ''', (userName, user_id))
+
+            conn.commit()
+
+            if cursor.rowcount == 0:
+                return {
+                    "code": 404,
+                    "message": "账号不存在"
+                }
+
+        return {
+            "code": 200,
+            "message": "account update successfully",
+            "data": None
+        }
+    except Exception as e:
+        print(f"更新账号失败: {str(e)}")
+        return {
+            "code": 500,
+            "message": f"更新账号失败: {str(e)}"
+        }
+
+@app.get("/deleteAccount")
+async def delete_account(id: int = None):
+    """删除账号 - 完全兼容social-auto-upload"""
+    try:
+        if id is None:
+            return {
+                "code": 400,
+                "msg": "Missing id parameter",
+                "data": None
+            }
+
+        with sqlite3.connect(ACCOUNT_DB_PATH) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            # 查询要删除的记录
+            cursor.execute("SELECT * FROM user_info WHERE id = ?", (id,))
+            record = cursor.fetchone()
+
+            if not record:
+                return {
+                    "code": 404,
+                    "msg": "account not found",
+                    "data": None
+                }
+
+            # 删除数据库记录
+            cursor.execute("DELETE FROM user_info WHERE id = ?", (id,))
+            conn.commit()
+
+        return {
+            "code": 200,
+            "msg": "account deleted successfully",
+            "data": None
+        }
+    except Exception as e:
+        print(f"删除账号失败: {str(e)}")
+        return {
+            "code": 500,
+            "msg": "delete failed!",
+            "data": None
+        }
+
+# SSE 登录接口 - 兼容social-auto-upload
+from fastapi.responses import StreamingResponse
+import queue
+import threading
+import asyncio
+
+@app.get("/login")
+async def login(type: str = None, id: str = None):
+    """SSE登录接口 - 完全兼容social-auto-upload实现，支持真实Playwright登录"""
+    if not type or not id:
+        return {"error": "Missing type or id parameter"}, 400
+
+    print(f"🔐 收到登录请求: 平台{type}, 账号{id}")
+
+    # 获取或创建状态队列
+    status_queue = login_service.get_queue(id)
+
+    # 启动异步登录任务
+    task = asyncio.create_task(run_login_process(type, id, status_queue))
+
+    async def generate():
+        try:
+            while True:
+                if not status_queue.empty():
+                    msg = status_queue.get()
+                    print(f"📨 发送SSE消息: {msg[:50]}...")
+                    yield f"data: {msg}\n\n"
+
+                    # 如果是登录完成消息，结束SSE连接
+                    if msg in ['200', '500']:
+                        print(f"✅ 登录流程完成: {msg}")
+                        break
+                else:
+                    await asyncio.sleep(0.1)
+        except Exception as e:
+            print(f"[!] SSE生成异常: {str(e)}")
+            yield f"data: 500\n\n"
+        finally:
+            # 清理队列
+            login_service.remove_queue(id)
+            print(f"🧹 清理登录队列: {id}")
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive"
+        }
+    )
+
+# 模拟登录后更新数据库的接口
+@app.post("/login/complete")
+async def complete_login(request: dict):
+    """登录完成后的回调接口"""
+    try:
+        account_id = request.get('id')
+        platform = request.get('platform')
+        status = request.get('status')  # '200' 成功, '500' 失败
+
+        if not account_id or not platform:
+            return {"code": 400, "message": "Missing required parameters"}
+
+        # 如果登录成功，更新或创建账号记录
+        if status == '200':
+            type_id = get_platform_type(platform)
+            file_path = f"cookies/{platform.lower()}_account_{account_id}.json"
+
+            with sqlite3.connect(ACCOUNT_DB_PATH) as conn:
+                cursor = conn.cursor()
+                # 检查账号是否已存在
+                cursor.execute("SELECT id FROM user_info WHERE userName = ?", (account_id,))
+                existing = cursor.fetchone()
+
+                if existing:
+                    # 更新状态为有效
+                    cursor.execute("UPDATE user_info SET status = 1 WHERE userName = ?", (account_id,))
+                else:
+                    # 创建新账号
+                    cursor.execute('''
+                        INSERT INTO user_info (type, filePath, userName, status)
+                        VALUES (?, ?, ?, ?)
+                    ''', (type_id, file_path, account_id, 1))
+
+                conn.commit()
+
+        # 通知前端
+        if account_id in active_queues:
+            active_queues[account_id].put(status)
+
+        return {"code": 200, "message": "Login status updated"}
+    except Exception as e:
+        print(f"登录完成处理失败: {str(e)}")
+        return {"code": 500, "message": f"Login completion failed: {str(e)}"}
+
 
 if __name__ == "__main__":
     import uvicorn

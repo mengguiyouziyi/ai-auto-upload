@@ -22,6 +22,7 @@
                 <el-button type="info" @click="fetchAccounts" :loading="false">
                   <el-icon :class="{ 'is-loading': appStore.isAccountRefreshing }"><Refresh /></el-icon>
                   <span v-if="appStore.isAccountRefreshing">刷新中</span>
+                  <span v-else>刷新</span>
                 </el-button>
               </div>
             </div>
@@ -85,6 +86,7 @@
                 <el-button type="info" @click="fetchAccounts" :loading="false">
                   <el-icon :class="{ 'is-loading': appStore.isAccountRefreshing }"><Refresh /></el-icon>
                   <span v-if="appStore.isAccountRefreshing">刷新中</span>
+                  <span v-else>刷新</span>
                 </el-button>
               </div>
             </div>
@@ -148,6 +150,7 @@
                 <el-button type="info" @click="fetchAccounts" :loading="false">
                   <el-icon :class="{ 'is-loading': appStore.isAccountRefreshing }"><Refresh /></el-icon>
                   <span v-if="appStore.isAccountRefreshing">刷新中</span>
+                  <span v-else>刷新</span>
                 </el-button>
               </div>
             </div>
@@ -211,6 +214,7 @@
                 <el-button type="info" @click="fetchAccounts" :loading="false">
                   <el-icon :class="{ 'is-loading': appStore.isAccountRefreshing }"><Refresh /></el-icon>
                   <span v-if="appStore.isAccountRefreshing">刷新中</span>
+                  <span v-else>刷新</span>
                 </el-button>
               </div>
             </div>
@@ -274,6 +278,7 @@
                 <el-button type="info" @click="fetchAccounts" :loading="false">
                   <el-icon :class="{ 'is-loading': appStore.isAccountRefreshing }"><Refresh /></el-icon>
                   <span v-if="appStore.isAccountRefreshing">刷新中</span>
+                  <span v-else>刷新</span>
                 </el-button>
               </div>
             </div>
@@ -438,10 +443,8 @@ const fetchAccounts = async () => {
 
 // 页面加载时获取账号数据
 onMounted(() => {
-  // 只有第一次进入时才获取数据
-  if (appStore.isFirstTimeAccountManagement) {
-    fetchAccounts()
-  }
+  // 每次进入页面都获取数据
+  fetchAccounts()
 })
 
 // 获取平台标签类型
@@ -600,7 +603,7 @@ const connectSSE = (platform, name) => {
   const type = platformTypeMap[platform] || '1'
   
   // 创建SSE连接
-  const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:9001'
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:9000'
   const url = `${baseUrl}/login?type=${type}&id=${encodeURIComponent(name)}`
   
   eventSource = new EventSource(url)
