@@ -3,10 +3,10 @@
 完整的AI媒体平台后端服务
 """
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 import sys
 import os
 import httpx
@@ -1233,6 +1233,45 @@ material_service = MaterialService()
 
 # ==================== 素材管理API ====================
 
+# 首先创建文件记录表（如果不存在）
+async def ensure_file_records_table():
+    """确保file_records表存在"""
+    import sqlite3
+    from pathlib import Path
+
+    db_path = Path("accounts.db")
+    if not db_path.exists():
+        return
+
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS file_records (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    filename TEXT NOT NULL,
+                    filesize REAL NOT NULL,
+                    file_path TEXT NOT NULL,
+                    upload_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            conn.commit()
+            print("✅ file_records表已确保存在")
+    except Exception as e:
+        print(f"⚠️ 创建file_records表失败: {str(e)}")
+
+# 在应用启动时创建表
+def init_database():
+    """初始化数据库表"""
+    import asyncio
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(ensure_file_records_table())
+    loop.close()
+
+# 初始化数据库
+init_database()
+
 @app.get("/api/v1/materials")
 async def get_all_materials():
     """获取所有素材"""
@@ -1251,6 +1290,264 @@ async def get_all_materials():
             "success": False,
             "message": f"获取素材列表失败: {str(e)}"
         }
+
+# ==================== Social-Auto-Upload兼容的文件管理API ====================
+
+@app.get("/getFiles")
+async def get_all_files():
+    """获取所有文件 - 兼容social-auto-upload"""
+    try:
+        import sqlite3
+        from pathlib import Path
+
+        db_path = Path("accounts.db")
+        if not db_path.exists():
+            return {
+                "code": 200,
+                "msg": "success",
+                "data": []
+            }
+
+        with sqlite3.connect(db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            cursor.execute("SELECT * FROM file_records ORDER BY upload_time DESC")
+            rows = cursor.fetchall()
+
+            data = [dict(row) for row in rows]
+
+        return {
+            "code": 200,
+            "msg": "success",
+            "data": data
+        }
+    except Exception as e:
+        print(f"获取文件列表失败: {str(e)}")
+        return {
+            "code": 500,
+            "msg": "get file failed!",
+            "data": None
+        }
+
+@app.post("/uploadSave")
+async def upload_save(request: Request):
+    """上传文件 - 兼容social-auto-upload"""
+    try:
+        from fastapi import File, UploadFile, Form
+        from fastapi.responses import JSONResponse
+        import uuid
+        import os
+        from pathlib import Path
+
+        # 确保目录存在
+        upload_dir = Path("videoFile")
+        upload_dir.mkdir(exist_ok=True)
+
+        # 获取表单数据
+        form = await request.form()
+
+        if 'file' not in form:
+            return JSONResponse({
+                "code": 400,
+                "data": None,
+                "msg": "No file part in the request"
+            }, status_code=400)
+
+        file = form['file']
+        custom_filename = form.get('filename', None)
+
+        if not file.filename:
+            return JSONResponse({
+                "code": 400,
+                "data": None,
+                "msg": "No selected file"
+            }, status_code=400)
+
+        # 生成UUID文件名
+        uuid_v1 = uuid.uuid1()
+        file_extension = file.filename.split('.')[-1]
+
+        if custom_filename:
+            filename = f"{custom_filename}.{file_extension}"
+        else:
+            filename = file.filename
+
+        final_filename = f"{uuid_v1}_{filename}"
+        filepath = upload_dir / final_filename
+
+        # 保存文件
+        with open(filepath, 'wb') as f:
+            content = await file.read()
+            f.write(content)
+
+        # 计算文件大小（MB）
+        file_size_mb = round(os.path.getsize(filepath) / (1024 * 1024), 2)
+
+        # 保存到数据库
+        db_path = Path("accounts.db")
+        if db_path.exists():
+            import sqlite3
+            with sqlite3.connect(db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    INSERT INTO file_records (filename, filesize, file_path)
+                    VALUES (?, ?, ?)
+                ''', (filename, file_size_mb, final_filename))
+                conn.commit()
+                print("✅ 上传文件已记录")
+
+        return JSONResponse({
+            "code": 200,
+            "msg": "File uploaded and saved successfully",
+            "data": {
+                "filename": filename,
+                "filepath": final_filename
+            }
+        })
+
+    except Exception as e:
+        print(f"上传失败: {str(e)}")
+        return JSONResponse({
+            "code": 500,
+            "msg": "upload failed!",
+            "data": None
+        }, status_code=500)
+
+@app.get("/deleteFile")
+async def delete_file(request: Request):
+    """删除文件 - 兼容social-auto-upload"""
+    try:
+        file_id = request.query_params.get('id')
+
+        if not file_id or not file_id.isdigit():
+            return JSONResponse({
+                "code": 400,
+                "msg": "Invalid or missing file ID",
+                "data": None
+            }, status_code=400)
+
+        import sqlite3
+        from pathlib import Path
+
+        db_path = Path("accounts.db")
+        if not db_path.exists():
+            return JSONResponse({
+                "code": 404,
+                "msg": "Database not found",
+                "data": None
+            }, status_code=404)
+
+        with sqlite3.connect(db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            # 查询要删除的记录
+            cursor.execute("SELECT * FROM file_records WHERE id = ?", (file_id,))
+            record = cursor.fetchone()
+
+            if not record:
+                return JSONResponse({
+                    "code": 404,
+                    "msg": "File not found",
+                    "data": None
+                }, status_code=404)
+
+            record = dict(record)
+
+            # 删除物理文件
+            file_path = Path("videoFile") / record['file_path']
+            if file_path.exists():
+                file_path.unlink()
+                print(f"✅ 物理文件已删除: {file_path}")
+
+            # 删除数据库记录
+            cursor.execute("DELETE FROM file_records WHERE id = ?", (file_id,))
+            conn.commit()
+
+        return JSONResponse({
+            "code": 200,
+            "msg": "File deleted successfully",
+            "data": {
+                "id": record['id'],
+                "filename": record['filename']
+            }
+        })
+
+    except Exception as e:
+        print(f"删除失败: {str(e)}")
+        return JSONResponse({
+            "code": 500,
+            "msg": "delete failed!",
+            "data": None
+        }, status_code=500)
+
+@app.get("/getFile")
+async def get_file(request: Request):
+    """获取文件 - 兼容social-auto-upload"""
+    try:
+        file_id = request.query_params.get('id')
+        filename = request.query_params.get('filename')
+
+        if not file_id or not file_id.isdigit():
+            return JSONResponse({"error": "file id is required and must be numeric"}, status_code=400)
+
+        # 从数据库查询文件路径
+        import sqlite3
+        from pathlib import Path
+
+        db_path = Path("accounts.db")
+        if not db_path.exists():
+            return JSONResponse({"error": "Database not found"}, status_code=404)
+
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT file_path, filename FROM file_records WHERE id = ?", (int(file_id),))
+            record = cursor.fetchone()
+
+        if not record:
+            return JSONResponse({"error": "File record not found"}, status_code=404)
+
+        file_path_in_db, original_filename = record
+
+        # 防止路径穿越攻击
+        if '..' in file_path_in_db or file_path_in_db.startswith('/'):
+            return JSONResponse({"error": "Invalid file path"}, status_code=400)
+
+        from fastapi.responses import FileResponse
+
+        file_path = Path("videoFile") / file_path_in_db
+
+        if not file_path.exists():
+            return JSONResponse({"error": "Physical file not found"}, status_code=404)
+
+        return FileResponse(file_path, filename=original_filename)
+
+    except Exception as e:
+        print(f"获取文件失败: {str(e)}")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.get("/download/{file_path:path}")
+async def download_file(file_path: str):
+    """下载文件 - 兼容social-auto-upload"""
+    try:
+        from fastapi.responses import FileResponse
+        from pathlib import Path
+
+        # 防止路径穿越攻击
+        if '..' in file_path or file_path.startswith('/'):
+            return JSONResponse({"error": "Invalid file path"}, status_code=400)
+
+        full_path = Path("videoFile") / file_path
+
+        if not full_path.exists():
+            return JSONResponse({"error": "File not found"}, status_code=404)
+
+        return FileResponse(full_path, filename=file_path)
+
+    except Exception as e:
+        print(f"下载文件失败: {str(e)}")
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 @app.get("/api/v1/materials/search")
 async def search_materials(keyword: str = ""):

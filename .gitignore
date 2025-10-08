@@ -69,6 +69,16 @@ build/
 .env.development.local
 .env.test.local
 .env.production.local
+*.env
+!ai-media-platform/frontend/.env.development
+!ai-media-platform/frontend/.env.production
+
+# 敏感配置文件（包含API密钥）
+secrets.json
+config.local.yaml
+*.local.*
+secrets.env
+private.*
 
 # Cookie files
 cookies/
