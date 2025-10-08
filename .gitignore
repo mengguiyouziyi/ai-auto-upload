@@ -72,20 +72,63 @@ build/
 
 # Cookie files
 cookies/
+# JSON files (except package.json and config files)
 *.json
+!package.json
+!package-lock.json
+!yarn.lock
+!**/tsconfig.json
+!**/vite.config.js
 
 # Generated files
 generated_videos/
+temp_videos/
+output/
+ai_videos/
+real_videos/
+true_ai_videos/
+frames/
+images/
+audio/
+
+# Media files (test/generated)
 *.mp4
 *.webp
 *.png
 *.jpg
 *.jpeg
+*.gif
+*.mp3
+*.wav
+*.avi
+*.mov
+*.mkv
 
 # Test files
 test_*.py
 *_test.py
 debug_*.py
+check_*.py
+simple_*.py
+final_*.py
+demo_*.py
+*_test.html
+test_*.html
+simple_test.html
+
+# Test reports and results
+*_report.*
+*test_report.*
+*_result.*
+report_*.json
+test_report_*.json
+*_report.json
+
+# AI platform specific
+text-to-video/
+text-to-speech/
+spider_server/
+comfyui_*
 
 # Temporary files
 *.tmp

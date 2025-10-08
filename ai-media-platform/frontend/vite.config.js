@@ -50,6 +50,26 @@ export default defineConfig({
         target: 'http://localhost:9000',
         changeOrigin: true,
         secure: false
+      },
+      '/account': {
+        target: 'http://localhost:9000',
+        changeOrigin: true,
+        secure: false
+      },
+      '/updateUserinfo': {
+        target: 'http://localhost:9000',
+        changeOrigin: true,
+        secure: false
+      },
+      '/deleteAccount': {
+        target: 'http://localhost:9000',
+        changeOrigin: true,
+        secure: false
+      },
+      '/login': {
+        target: 'http://localhost:9000',
+        changeOrigin: true,
+        secure: false
       }
     }
   },
