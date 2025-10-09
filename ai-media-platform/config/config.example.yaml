@@ -1,0 +1,74 @@
+# AI媒体智能平台配置文件示例
+
+# 安全配置
+security:
+  cors_origins:
+    - "http://localhost:5174"
+    - "http://localhost:3000"
+    - "http://127.0.0.1:5174"
+    - "http://127.0.0.1:3000"
+
+# LLM服务配置
+llm:
+  default_provider: "doubao"
+  providers:
+    doubao:
+      api_key: "your_doubao_api_key_here"
+      base_url: "https://ark.cn-beijing.volces.com/api/v3"
+      model: "ep-202410080002345-d9qkl"
+    openai:
+      api_key: "your_openai_api_key_here"
+      base_url: "https://api.openai.com/v1"
+      model: "gpt-3.5-turbo"
+
+# TTS服务配置
+tts:
+  default_provider: "azure"
+  providers:
+    azure:
+      api_key: "your_azure_api_key_here"
+      region: "eastus"
+      voice: "zh-CN-XiaoxiaoNeural"
+    edge:
+      voice: "zh-CN-XiaoxiaoNeural"
+
+# 视频生成服务配置
+video:
+  default_provider: "comfyui_wan"
+  providers:
+    comfyui_wan:
+      base_url: "http://localhost:8188"
+      workflow_path: "workflows/wan_video_workflow.json"
+    comfyui_sd3:
+      base_url: "http://localhost:8188"
+      workflow_path: "workflows/sd3_workflow.json"
+
+# 社交媒体上传配置
+social_upload:
+  default_provider: "douyin"
+  providers:
+    douyin:
+      headless: false
+      timeout: 300000
+    xiaohongshu:
+      headless: false
+      timeout: 300000
+
+# 系统配置
+system:
+  max_video_duration: 300  # 最大视频时长（秒）
+  max_file_size: 100MB     # 最大文件大小
+  temp_dir: "temp"
+  storage_dir: "storage"
+  log_dir: "logs"
+
+# 数据库配置
+database:
+  path: "data/app.db"
+
+# Redis配置（可选）
+redis:
+  host: "localhost"
+  port: 6379
+  db: 0
+  password: null
