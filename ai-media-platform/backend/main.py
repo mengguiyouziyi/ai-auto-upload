@@ -36,6 +36,7 @@ from services.video.video_service_minimal import get_video_service, VideoProvide
 from routes.legacy_social import router as legacy_social_router
 from routes.spider import router as spider_router
 from routes.video import router as video_router, init_video_service
+from routes.douyin_publish import router as douyin_publish_router
 from services.social_upload.social_upload_service import (
     get_social_upload_service,
     SocialPlatform,
@@ -94,6 +95,7 @@ app = FastAPI(
 app.include_router(legacy_social_router, tags=["Social Auto Upload"])
 app.include_router(spider_router, tags=["智能爬虫"])
 app.include_router(video_router, tags=["视频生成"])
+app.include_router(douyin_publish_router, tags=["抖音发布"])
 
 # 配置CORS
 config = {}
