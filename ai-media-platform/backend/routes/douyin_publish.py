@@ -23,14 +23,23 @@ if str(SOCIAL_ROOT) not in sys.path:
     sys.path.insert(0, str(SOCIAL_ROOT))
 
 try:
+    # 优先使用GitHub优化版本
+    from routes.douyin_upload_github import DouYinVideo
     from conf import BASE_DIR
-    from uploader.douyin_uploader.main import DouYinVideo
     from utils.files_times import generate_schedule_time_next_day
     SOCIAL_AUTO_UPLOAD_AVAILABLE = True
-    logger.info("social-auto-upload模块导入成功")
-except ImportError as e:
-    logger.error(f"无法导入social-auto-upload模块: {e}")
-    SOCIAL_AUTO_UPLOAD_AVAILABLE = False
+    logger.info("GitHub优化版抖音发布模块导入成功")
+except ImportError:
+    try:
+        # 回退到原版
+        from conf import BASE_DIR
+        from uploader.douyin_uploader.main import DouYinVideo
+        from utils.files_times import generate_schedule_time_next_day
+        SOCIAL_AUTO_UPLOAD_AVAILABLE = True
+        logger.info("原版抖音发布模块导入成功")
+    except ImportError as e:
+        logger.error(f"无法导入social-auto-upload模块: {e}")
+        SOCIAL_AUTO_UPLOAD_AVAILABLE = False
 
 router = APIRouter()
 
@@ -212,7 +221,7 @@ async def execute_douyin_publish(task_id: str):
         logger.error(f"抖音发布任务 {task_id} 执行失败: {e}")
 
 
-@router.post("/publish/test")
+@router.get("/publish/test")
 async def test_publish():
     """
     测试发布功能 - 查看可用的账号和cookie
