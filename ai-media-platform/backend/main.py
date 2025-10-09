@@ -33,10 +33,22 @@ if legacy_social_dir.exists() and str(legacy_social_dir) not in sys.path:
 from services.llm.llm_service import get_llm_service, LLMProvider, LLMRequest, Message
 from services.tts.tts_service import get_tts_service, TTSProvider, TTSRequest
 from services.video.video_service_minimal import get_video_service, VideoProvider, VideoRequest, VideoService
+
+# 导入优化服务
+try:
+    from services.video.video_service_optimized import get_optimized_video_service
+    from services.spider.spider_service_optimized import get_spider_service
+    from services.llm.text_optimize_service_optimized import get_text_optimize_service
+    OPTIMIZED_SERVICES_AVAILABLE = True
+    logger.info("优化服务导入成功")
+except ImportError as e:
+    logger.warning(f"优化服务导入失败: {e}，使用原始服务")
+    OPTIMIZED_SERVICES_AVAILABLE = False
 from routes.legacy_social import router as legacy_social_router
 from routes.spider import router as spider_router
 from routes.video import router as video_router, init_video_service
 from routes.douyin_publish import router as douyin_publish_router
+from routes.text_optimize import router as text_optimize_router
 from services.social_upload.social_upload_service import (
     get_social_upload_service,
     SocialPlatform,
@@ -71,6 +83,17 @@ async def lifespan(app: FastAPI):
     app.state.video_service = get_video_service(config)
     app.state.social_upload_service = get_social_upload_service(config)
 
+    # 初始化优化服务（如果可用）
+    if OPTIMIZED_SERVICES_AVAILABLE:
+        try:
+            app.state.optimized_video_service = get_optimized_video_service(config)
+            app.state.spider_service = get_spider_service(config)
+            app.state.text_optimize_service = get_text_optimize_service(config)
+            logger.info("优化服务初始化成功")
+        except Exception as e:
+            logger.warning(f"优化服务初始化失败: {e}")
+            OPTIMIZED_SERVICES_AVAILABLE = False
+
     # 创建必要的目录
     Path("temp").mkdir(exist_ok=True)
     Path("storage").mkdir(exist_ok=True)
@@ -96,6 +119,7 @@ app.include_router(legacy_social_router, tags=["Social Auto Upload"])
 app.include_router(spider_router, tags=["智能爬虫"])
 app.include_router(video_router, tags=["视频生成"])
 app.include_router(douyin_publish_router, tags=["抖音发布"])
+app.include_router(text_optimize_router, tags=["文本优化"])
 
 # 配置CORS
 config = {}

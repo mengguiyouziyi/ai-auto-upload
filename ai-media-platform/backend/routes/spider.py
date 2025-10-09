@@ -16,9 +16,28 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-# 直接在这里定义爬虫函数，避免导入问题
+# 导入优化的爬虫服务
+try:
+    from services.spider.spider_service_optimized import get_spider_service
+    SPIDER_SERVICE_AVAILABLE = True
+    logger.info("优化爬虫服务导入成功")
+except ImportError as e:
+    logger.warning(f"优化爬虫服务导入失败: {e}，使用模拟服务")
+    SPIDER_SERVICE_AVAILABLE = False
 
 router = APIRouter(prefix="/api/v1/spider", tags=["智能爬虫"])
+
+# 全局爬虫服务实例
+_spider_service = None
+
+def get_spider_service_instance():
+    """获取爬虫服务实例"""
+    global _spider_service
+    if _spider_service is None and SPIDER_SERVICE_AVAILABLE:
+        # 这里可以从app.state.config获取配置
+        config = {}
+        _spider_service = get_spider_service(config)
+    return _spider_service
 
 
 class SpiderRequest(BaseModel):
@@ -273,23 +292,48 @@ async def crawl_url(request: SpiderRequest):
         if not request.url:
             raise HTTPException(status_code=400, detail="URL不能为空")
 
-        # 添加延迟避免请求过快
-        await asyncio.sleep(request.delay)
-
-        result = await crawl_single_url(str(request.url), request.mode)
-
-        if result["success"]:
-            return SpiderResponse(
-                success=True,
-                message="爬取成功",
-                data=result
+        # 优先使用优化服务
+        spider_service = get_spider_service_instance()
+        if spider_service:
+            logger.info("使用优化爬虫服务")
+            result = await spider_service.crawl_article(
+                url=str(request.url),
+                mode=request.mode,
+                depth=request.depth,
+                filters=request.filters,
+                delay=request.delay
             )
+
+            if result and not result.get("error"):
+                return SpiderResponse(
+                    success=True,
+                    message="爬取成功",
+                    data=result
+                )
+            else:
+                return SpiderResponse(
+                    success=False,
+                    message=f"爬取失败: {result.get('error', '未知错误') if result else '服务不可用'}",
+                    data=result
+                )
         else:
-            return SpiderResponse(
-                success=False,
-                message=f"爬取失败: {result.get('error', '未知错误')}",
-                data=result
-            )
+            # 回退到原始实现
+            logger.info("使用原始爬虫实现")
+            await asyncio.sleep(request.delay)
+            result = await crawl_single_url(str(request.url), request.mode)
+
+            if result["success"]:
+                return SpiderResponse(
+                    success=True,
+                    message="爬取成功",
+                    data=result
+                )
+            else:
+                return SpiderResponse(
+                    success=False,
+                    message=f"爬取失败: {result.get('error', '未知错误')}",
+                    data=result
+                )
 
     except Exception as e:
         logger.error(f"爬虫API错误: {e}")
