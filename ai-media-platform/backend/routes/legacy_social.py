@@ -20,13 +20,19 @@ import sys
 # 初始化依赖路径
 # -----------------------------
 CURRENT_DIR = Path(__file__).resolve()
-PROJECT_ROOT = CURRENT_DIR.parents[2]
+PROJECT_ROOT = CURRENT_DIR.parents[3]  # 修正：从backend/routes/向上3级到ai-auto-upload
 SOCIAL_ROOT = PROJECT_ROOT / "social-auto-upload"
 
-if str(SOCIAL_ROOT) not in sys.path:
-    sys.path.insert(0, str(SOCIAL_ROOT))
+logger.info(f"legacy_social.py - 当前路径: {CURRENT_DIR}")
+logger.info(f"legacy_social.py - 项目根目录: {PROJECT_ROOT}")
+logger.info(f"legacy_social.py - social-auto-upload路径: {SOCIAL_ROOT}")
+logger.info(f"legacy_social.py - social-auto-upload存在: {SOCIAL_ROOT.exists()}")
 
+# 尝试导入social-auto-upload模块（可选）
 try:
+    if str(SOCIAL_ROOT) not in sys.path:
+        sys.path.insert(0, str(SOCIAL_ROOT))
+
     from conf import BASE_DIR  # type: ignore
     from myUtils.auth import check_cookie  # type: ignore
     from myUtils.login import (  # type: ignore
@@ -41,9 +47,13 @@ try:
         post_video_tencent,
         post_video_xhs,
     )
+    SOCIAL_AUTO_UPLOAD_AVAILABLE = True
+    logger.info("social-auto-upload模块导入成功")
 except ImportError as exc:  # pragma: no cover - 环境问题
-    logger.error(f"导入 social-auto-upload 模块失败: {exc}")
-    raise
+    logger.warning(f"导入 social-auto-upload 模块失败: {exc}")
+    logger.warning("将使用独立实现的上传功能")
+    SOCIAL_AUTO_UPLOAD_AVAILABLE = False
+    BASE_DIR = SOCIAL_ROOT  # 使用备用路径
 
 router = APIRouter()
 
@@ -89,7 +99,19 @@ async def get_valid_accounts():
     async def check_and_update(row: List) -> List:
         account_type, file_path, status = row[1], row[2], row[4]
         try:
-            is_valid = await check_cookie(account_type, file_path)
+            # 使用我们自己的cookie验证函数
+            if SOCIAL_AUTO_UPLOAD_AVAILABLE and 'check_cookie' in globals():
+                is_valid = await check_cookie(account_type, file_path)
+            else:
+                # 使用抖音上传模块中的验证方法
+                if account_type == 3:  # 抖音
+                    from .douyin_upload import DouYinVideoUploader
+                    full_path = SOCIAL_ROOT / "cookiesFile" / file_path
+                    uploader = DouYinVideoUploader(str(full_path), headless=True)
+                    is_valid = await uploader.cookie_auth()
+                else:
+                    # 其他平台暂时认为有效
+                    is_valid = status == 1
         except Exception as exc:  # Playwright 或浏览器未配置等情况
             logger.warning(f"账号 {row[0]} Cookie 校验失败: {exc}")
             is_valid = status == 1  # 保持原状态，避免误判
@@ -256,6 +278,28 @@ async def get_file(filename: str):
 # -----------------------------
 
 
+@router.post("/generateDouyinCookie")
+async def generate_douyin_cookie_endpoint(account_file: str):
+    """生成抖音Cookie，打开浏览器让用户登录"""
+    try:
+        from .douyin_upload import generate_douyin_cookie
+
+        # 构建完整的Cookie文件路径
+        full_path = SOCIAL_ROOT / "cookiesFile" / account_file
+
+        logger.info(f"开始生成抖音Cookie: {account_file}")
+        success = await generate_douyin_cookie(str(full_path))
+
+        if success:
+            return {"code": 200, "msg": "抖音Cookie生成成功，请检查浏览器并完成登录", "data": None}
+        else:
+            return {"code": 500, "msg": "抖音Cookie生成失败", "data": None}
+
+    except Exception as e:
+        logger.error(f"生成抖音Cookie失败: {e}")
+        return {"code": 500, "msg": f"生成Cookie失败: {str(e)}", "data": None}
+
+
 @router.post("/postVideo")
 async def post_video(payload: Dict):
     file_list = payload.get("fileList", [])
@@ -273,66 +317,91 @@ async def post_video(payload: Dict):
         "发布任务: type={} files={} accounts={}", type_, file_list, account_list
     )
 
-    async def run_post():
-        match type_:
-            case 1:
-                await _run_in_thread(
-                    post_video_xhs,
-                    title,
-                    file_list,
-                    tags,
-                    account_list,
-                    category,
-                    enable_timer,
-                    videos_per_day,
-                    daily_times,
-                    start_days,
-                )
-            case 2:
-                await _run_in_thread(
-                    post_video_tencent,
-                    title,
-                    file_list,
-                    tags,
-                    account_list,
-                    category,
-                    enable_timer,
-                    videos_per_day,
-                    daily_times,
-                    start_days,
-                )
-            case 3:
-                await _run_in_thread(
-                    post_video_DouYin,
-                    title,
-                    file_list,
-                    tags,
-                    account_list,
-                    category,
-                    enable_timer,
-                    videos_per_day,
-                    daily_times,
-                    start_days,
-                )
-            case 4:
-                await _run_in_thread(
-                    post_video_ks,
-                    title,
-                    file_list,
-                    tags,
-                    account_list,
-                    category,
-                    enable_timer,
-                    videos_per_day,
-                    daily_times,
-                    start_days,
-                )
-            case _:
-                raise HTTPException(status_code=400, detail="不支持的平台类型")
+    # 对于抖音上传，使用我们独立实现的模块
+    if type_ == 3:
+        try:
+            from .douyin_upload import upload_douyin_video
+            # 自动登录功能，默认关闭避免意外打开浏览器
+            auto_login = payload.get("autoLogin", False)
 
-    await run_post()
+            success = await upload_douyin_video(
+                title=title,
+                file_list=file_list,
+                tags=tags or [],
+                account_list=account_list,
+                category=category or 0,
+                enable_timer=bool(enable_timer),
+                videos_per_day=videos_per_day or 1,
+                daily_times=daily_times or ["10:00"],
+                start_days=start_days or 0,
+                auto_login=auto_login
+            )
 
-    return {"code": 200, "msg": None, "data": None}
+            if success:
+                return {"code": 200, "msg": "抖音视频上传成功", "data": None}
+            else:
+                return {"code": 500, "msg": "抖音视频上传失败", "data": None}
+
+        except Exception as e:
+            logger.error(f"抖音上传失败: {e}")
+            return {"code": 500, "msg": f"抖音上传出错: {str(e)}", "data": None}
+
+    # 对于其他平台，尝试使用原始social-auto-upload实现
+    if SOCIAL_AUTO_UPLOAD_AVAILABLE:
+        try:
+            async def run_post():
+                match type_:
+                    case 1:
+                        await _run_in_thread(
+                            post_video_xhs,
+                            title,
+                            file_list,
+                            tags,
+                            account_list,
+                            category,
+                            enable_timer,
+                            videos_per_day,
+                            daily_times,
+                            start_days,
+                        )
+                    case 2:
+                        await _run_in_thread(
+                            post_video_tencent,
+                            title,
+                            file_list,
+                            tags,
+                            account_list,
+                            category,
+                            enable_timer,
+                            videos_per_day,
+                            daily_times,
+                            start_days,
+                        )
+                    case 4:
+                        await _run_in_thread(
+                            post_video_ks,
+                            title,
+                            file_list,
+                            tags,
+                            account_list,
+                            category,
+                            enable_timer,
+                            videos_per_day,
+                            daily_times,
+                            start_days,
+                        )
+                    case _:
+                        raise HTTPException(status_code=400, detail="不支持的平台类型")
+
+            await run_post()
+            return {"code": 200, "msg": None, "data": None}
+
+        except Exception as e:
+            logger.error(f"发布失败: {e}")
+            return {"code": 500, "msg": f"发布失败: {str(e)}", "data": None}
+    else:
+        logger.error(f"不支持的平台类型 {type_}，social-auto-upload模块不可用")
+        return {"code": 400, "msg": f"不支持的平台类型或模块缺失: {type_}", "data": None}
 
 
 @router.post("/postVideoBatch")
