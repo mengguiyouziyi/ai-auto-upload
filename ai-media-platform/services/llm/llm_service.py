@@ -5,6 +5,7 @@ LLM服务模块 - 集成多种大语言模型API
 
 import asyncio
 import json
+import time
 from typing import Dict, List, Optional, Union
 from enum import Enum
 import httpx

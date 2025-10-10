@@ -539,7 +539,7 @@ const addToMaterialLibrary = async (videoData) => {
     formData.append('file', file)
     formData.append('filename', `AI视频_${new Date().toLocaleString()}.webp`)
 
-    const uploadResponse = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:9001'}/uploadSave`, {
+    const uploadResponse = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:9000'}/uploadSave`, {
       method: 'POST',
       body: formData
     })
@@ -649,7 +649,7 @@ const getProxyUrl = (url) => {
     return url
   }
   // 否则构建完整URL
-  return `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:9001'}/${url}`
+  return `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:9000'}/${url}`
 }
 
 // 获取视频URL，优先使用本地视频URL

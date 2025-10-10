@@ -453,7 +453,7 @@ const startWorkflow = async () => {
 }
 
 const optimizeText = async (text) => {
-  const response = await axios.post('http://localhost:9001/api/v1/llm/optimize-text', {
+  const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:9000'}/api/v1/llm/optimize-text`, {
     text: text,
     provider: workflow.llm_provider
   })
@@ -461,7 +461,7 @@ const optimizeText = async (text) => {
 }
 
 const generateAudio = async (text) => {
-  const response = await axios.post('http://localhost:9001/api/v1/tts/synthesize', {
+  const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:9000'}/api/v1/tts/synthesize`, {
     provider: workflow.tts_provider,
     text: text,
     voice: 'zh-CN-XiaoxiaoNeural',
@@ -471,7 +471,7 @@ const generateAudio = async (text) => {
 }
 
 const generateVideo = async (text) => {
-  const response = await axios.post('http://localhost:9001/api/v1/video/generate', {
+  const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:9000'}/api/v1/video/generate`, {
     provider: workflow.video_provider,
     text: text,
     duration: 10,

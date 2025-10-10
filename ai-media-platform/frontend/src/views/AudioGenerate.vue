@@ -294,7 +294,7 @@ const generateAudio = async () => {
 
   loading.value = true
   try {
-    const response = await axios.post('http://localhost:9001/api/v1/tts/synthesize', {
+    const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:9000'}/api/v1/tts/synthesize`, {
       provider: form.provider,
       text: form.text,
       voice: form.voice,
@@ -406,7 +406,7 @@ const batchGenerate = async () => {
   for (let i = 0; i < texts.length; i++) {
     const text = texts[i].trim()
     try {
-      const response = await axios.post('http://localhost:9001/api/v1/tts/synthesize', {
+      const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:9000'}/api/v1/tts/synthesize`, {
         provider: form.provider,
         text: text,
         voice: form.voice,

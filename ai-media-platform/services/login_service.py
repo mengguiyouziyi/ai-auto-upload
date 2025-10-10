@@ -18,100 +18,35 @@ BASE_DIR = Path(__file__).parent.parent
 
 # 抖音登录 - 修复版本的实现
 async def douyin_cookie_gen(id, status_queue):
-    """抖音Cookie生成 - 修复URL检测问题"""
+    """抖音Cookie生成 - 参考GitHub原始实现的简化版本"""
     url_changed_event = asyncio.Event()
     login_success = False
 
     async def on_url_change():
-        """修复URL变化检测逻辑"""
+        """增强的URL变化检测逻辑 - 更灵敏的检测"""
         try:
             current_url = page.url
             if current_url != original_url:
                 print(f"🔗 URL变化检测: {original_url} -> {current_url}")
-                url_changed_event.set()
-        except Exception as e:
-            print(f"[!] URL检测异常: {str(e)}")
-
-    async def check_login_success():
-        """检查登录成功的多种方法 - 更严格的版本"""
-        try:
-            current_url = page.url
-            print(f"🔍 检查登录状态, 当前URL: {current_url}")
-
-            # 方法1: 检查URL变化到明确的成功页面
-            if current_url != original_url:
-                # 检查是否跳转到创作者中心或其他成功页面
+                # 立即检查是否跳转到成功页面
                 success_patterns = [
-                    "creator-micro",
-                    "content/upload",
-                    "/publish",
-                    "/studio"
+                    "creator-micro/home",
+                    "creator-micro/content/upload",
+                    "creator-micro/content/post",
+                    "/studio",
+                    "/publish"
                 ]
                 if any(pattern in current_url for pattern in success_patterns):
-                    print("✅ 方法1: URL跳转到成功页面")
-                    return True
+                    print("✅ 检测到成功页面跳转")
+                    url_changed_event.set()
                 else:
-                    print(f"⚠️ URL已变化但不是成功页面: {current_url}")
-
-            # 方法2: 检查是否有明确的用户登录元素
-            try:
-                # 检查是否有用户头像、用户名等明确的登录标识
-                user_elements = await page.query_selector_all(
-                    '[class*="avatar"], [class*="user-name"], [class*="nickname"], '
-                    '[class*="user-info"], [data-testid*="user"], img[alt*="头像"]'
-                )
-                if user_elements:
-                    # 进一步验证元素是否真的可见
-                    visible_elements = []
-                    for element in user_elements:
-                        try:
-                            if await element.is_visible():
-                                visible_elements.append(element)
-                        except:
-                            pass
-
-                    if visible_elements:
-                        print(f"✅ 方法2: 找到 {len(visible_elements)} 个可见的用户元素")
-                        return True
-            except Exception as e:
-                print(f"[!] 方法2异常: {str(e)}")
-
-            # 方法3: 检查二维码是否真的消失且页面发生变化
-            try:
-                qr_elements = await page.query_selector_all('img[alt*="二维码"], img[src*="qr"], .qrcode')
-
-                # 检查页面标题是否改变
-                current_title = await page.title()
-
-                # 如果二维码消失且页面标题不是登录页标题，可能登录成功
-                if not qr_elements and "登录" not in current_title:
-                    print("✅ 方法3: 二维码消失且页面标题无'登录'")
-                    return True
-                elif qr_elements:
-                    print(f"⚠️ 仍存在 {len(qr_elements)} 个二维码元素")
-
-            except Exception as e:
-                print(f"[!] 方法3异常: {str(e)}")
-
-            # 方法4: 检查是否有登录按钮消失
-            try:
-                login_buttons = await page.query_selector_all(
-                    'button:has-text("登录"), .login-btn, [class*="login"]'
-                )
-                if not login_buttons:
-                    print("✅ 方法4: 登录按钮消失")
-                    return True
-                else:
-                    print(f"⚠️ 仍存在 {len(login_buttons)} 个登录按钮")
-            except:
-                pass
-
-            print(f"❌ 所有登录检测方法均未通过")
-            return False
-
+                    print(f"⚠️ URL变化但不是成功页面: {current_url}")
+                    # 仍然设置事件，让主流程进一步处理
+                    url_changed_event.set()
         except Exception as e:
-            print(f"[!] 登录检查异常: {str(e)}")
-            return False
+            print(f"[!] URL检测异常: {str(e)}")
+            # 即使出错也设置事件，避免卡死
+            url_changed_event.set()
 
     async with async_playwright() as playwright:
         options = {
@@ -127,48 +62,19 @@ async def douyin_cookie_gen(id, status_queue):
 
             # 访问抖音创作者中心
             await page.goto("https://creator.douyin.com/")
-            await page.wait_for_load_state('networkidle')
             original_url = page.url
             print(f"📄 初始URL: {original_url}")
 
-            # 查找二维码元素 - 使用当前抖音页面的正确选择器
+            # 使用原始实现的简单二维码定位方式
             print("🔍 查找二维码元素...")
-
-            # 尝试多种选择器来找到二维码
-            qr_selectors = [
-                'img[class*="qrcode_img"]',
-                '[class*="qr"] img',
-                'img[src*="qr"]'
-            ]
-
-            img_locator = None
-            src = None
-
-            for selector in qr_selectors:
-                try:
-                    print(f"   尝试选择器: {selector}")
-                    img_locator = page.locator(selector).first
-                    if await img_locator.count() > 0:
-                        src = await img_locator.get_attribute("src")
-                        if src and (src.startswith('data:') or 'qr' in src.lower()):
-                            print(f"   ✅ 找到二维码，使用选择器: {selector}")
-                            break
-                except Exception as e:
-                    print(f"   ❌ 选择器失败 {selector}: {str(e)}")
-                    continue
-
-            # 尝试获取二维码
             try:
-                if not src and img_locator:
-                    src = await img_locator.get_attribute("src")
-                if src:
-                    print(f"✅ 图片地址: {src[:50]}...")
-                    status_queue.put(src)
-                else:
-                    print("⚠️ 二维码src属性为空")
-                    status_queue.put("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")
+                img_locator = page.get_by_role("img", name="二维码")
+                src = await img_locator.get_attribute("src")
+                print(f"✅ 图片地址: {src[:50] if src else 'None'}...")
+                status_queue.put(src if src else "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")
             except Exception as e:
                 print(f"⚠️ 获取二维码失败: {str(e)}")
+                # 如果找不到二维码，发送默认图片
                 status_queue.put("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")
 
             # 监听页面导航事件
@@ -177,21 +83,15 @@ async def douyin_cookie_gen(id, status_queue):
             print("⏳ 等待用户扫码登录（最多200秒）...")
             print("💡 请在手机抖音App中扫描二维码完成登录")
 
-            # 使用轮询检查登录状态
-            start_time = asyncio.get_event_loop().time()
-            while True:
-                elapsed = asyncio.get_event_loop().time() - start_time
-
-                if elapsed > 200:  # 200秒超时
-                    print("⏰ 登录超时")
-                    break
-
-                # 检查登录是否成功
-                if await check_login_success():
-                    login_success = True
-                    break
-
-                await asyncio.sleep(2)  # 每2秒检查一次
+            # 使用原始实现的简单等待逻辑
+            try:
+                # 等待URL变化或超时 - 不需要复杂的轮询检查
+                await asyncio.wait_for(url_changed_event.wait(), timeout=200)
+                print("✅ 监听页面跳转成功")
+                login_success = True
+            except asyncio.TimeoutError:
+                print("⏰ 监听页面跳转超时")
+                login_success = False
 
             if login_success:
                 print("✅ 登录成功！正在保存Cookie...")
@@ -199,13 +99,14 @@ async def douyin_cookie_gen(id, status_queue):
                 uuid_v1 = uuid.uuid1()
                 print(f"UUID v1: {uuid_v1}")
 
-                # 创建cookies目录
-                cookies_dir = Path("cookies")
+                # 创建cookies目录 - 使用正确的绝对路径
+                cookies_dir = BASE_DIR / "cookies"
                 cookies_dir.mkdir(exist_ok=True)
 
                 # 保存Cookie
-                await context.storage_state(path=cookies_dir / f"{uuid_v1}.json")
-                print(f"💾 Cookie已保存: cookies/{uuid_v1}.json")
+                cookie_path = cookies_dir / f"{uuid_v1}.json"
+                await context.storage_state(path=cookie_path)
+                print(f"💾 Cookie已保存: {cookie_path}")
 
                 # 验证Cookie
                 print("🔍 验证Cookie有效性...")
@@ -240,9 +141,9 @@ async def douyin_cookie_gen(id, status_queue):
             except:
                 pass
 
-# 快手登录 - 复制GitHub版本实现
+# 快手登录 - 参考原始实现简化
 async def ks_cookie_gen(id, status_queue):
-    """快手Cookie生成 - 复制自social-auto-upload GitHub版本"""
+    """快手Cookie生成 - 参考原始实现简化版本"""
     url_changed_event = asyncio.Event()
 
     async def on_url_change():
@@ -276,10 +177,10 @@ async def ks_cookie_gen(id, status_queue):
         try:
             # 等待 URL 变化或超时
             await asyncio.wait_for(url_changed_event.wait(), timeout=200)  # 最多等待 200 秒
-            print("监听页面跳转成功")
+            print("✅ 监听页面跳转成功")
         except asyncio.TimeoutError:
             status_queue.put("500")
-            print("监听页面跳转超时")
+            print("⏰ 监听页面跳转超时")
             await page.close()
             await context.close()
             await browser.close()
@@ -287,12 +188,13 @@ async def ks_cookie_gen(id, status_queue):
         uuid_v1 = uuid.uuid1()
         print(f"UUID v1: {uuid_v1}")
 
-        # 创建cookies目录
-        cookies_dir = Path("cookies")
+        # 创建cookies目录 - 使用正确的绝对路径
+        cookies_dir = BASE_DIR / "cookies"
         cookies_dir.mkdir(exist_ok=True)
 
-        await context.storage_state(path=cookies_dir / f"{uuid_v1}.json")
-        result = await check_cookie(4, f"{uuid_v1}.json")
+        cookie_path = cookies_dir / f"{uuid_v1}.json"
+        await context.storage_state(path=cookie_path)
+        result = await check_cookie(4, f"cookies/{uuid_v1}.json")
         if not result:
             status_queue.put("500")
             await page.close()
@@ -352,12 +254,13 @@ async def xiaohongshu_cookie_gen(id, status_queue):
         uuid_v1 = uuid.uuid1()
         print(f"UUID v1: {uuid_v1}")
 
-        # 创建cookies目录
-        cookies_dir = Path("cookies")
+        # 创建cookies目录 - 使用正确的绝对路径
+        cookies_dir = BASE_DIR / "cookies"
         cookies_dir.mkdir(exist_ok=True)
 
-        await context.storage_state(path=cookies_dir / f"{uuid_v1}.json")
-        result = await check_cookie(1, f"{uuid_v1}.json")
+        cookie_path = cookies_dir / f"{uuid_v1}.json"
+        await context.storage_state(path=cookie_path)
+        result = await check_cookie(1, f"cookies/{uuid_v1}.json")
         if not result:
             status_queue.put("500")
             await page.close()
@@ -422,12 +325,13 @@ async def wechat_cookie_gen(id, status_queue):
         uuid_v1 = uuid.uuid1()
         print(f"UUID v1: {uuid_v1}")
 
-        # 创建cookies目录
-        cookies_dir = Path("cookies")
+        # 创建cookies目录 - 使用正确的绝对路径
+        cookies_dir = BASE_DIR / "cookies"
         cookies_dir.mkdir(exist_ok=True)
 
-        await context.storage_state(path=cookies_dir / f"{uuid_v1}.json")
-        result = await check_cookie(2, f"{uuid_v1}.json")
+        cookie_path = cookies_dir / f"{uuid_v1}.json"
+        await context.storage_state(path=cookie_path)
+        result = await check_cookie(2, f"cookies/{uuid_v1}.json")
         if not result:
             status_queue.put("500")
             await page.close()

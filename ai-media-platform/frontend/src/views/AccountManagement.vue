@@ -677,7 +677,18 @@ const connectSSE = (platform, name) => {
   // 监听错误
   eventSource.onerror = (error) => {
     console.error('SSE连接错误:', error)
-    ElMessage.error('连接服务器失败，请稍后再试')
+
+    // 如果已经收到登录成功状态，不显示错误消息
+    if (loginStatus.value === '200') {
+      console.log('登录已成功，忽略SSE关闭错误')
+      return
+    }
+
+    // 只有在真正连接失败时才显示错误消息
+    if (!qrCodeData.value && !loginStatus.value) {
+      ElMessage.error('连接服务器失败，请稍后再试')
+    }
+
     closeSSEConnection()
     sseConnecting.value = false
   }
