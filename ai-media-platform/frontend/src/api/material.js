@@ -1,4 +1,4 @@
-import { http } from '@/utils/request'
+import { http, request } from '@/utils/request'
 
 // 素材管理API
 export const materialApi = {
@@ -15,16 +15,16 @@ export const materialApi = {
   
   // 删除素材
   deleteMaterial: (id) => {
-    return http.get(`/deleteFile?id=${id}`)
+    return request.get(`/deleteFile?id=${id}`)
   },
   
   // 下载素材
   downloadMaterial: (filePath) => {
-    return `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:9001'}/download/${filePath}`
+    return `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:9000'}/download/${filePath}`
   },
   
   // 获取素材预览URL
   getMaterialPreviewUrl: (filename) => {
-    return `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:9001'}/getFile?filename=${filename}`
+    return `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:9000'}/getFile?filename=${filename}`
   }
 }

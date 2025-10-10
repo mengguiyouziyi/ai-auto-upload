@@ -151,10 +151,12 @@ const fetchMaterials = async () => {
   isRefreshing.value = true
   try {
     const response = await materialApi.getAllMaterials()
-    
+
     if (response.code === 200) {
+      // 强制清除store中的旧数据，使用最新数据
+      appStore.setMaterials([])
       appStore.setMaterials(response.data)
-      ElMessage.success('刷新成功')
+      ElMessage.success(`刷新成功，获取到 ${response.data.length} 个文件`)
     } else {
       ElMessage.error('获取素材列表失败')
     }
@@ -286,6 +288,8 @@ const handleDelete = (material) => {
         
         if (response.code === 200) {
           appStore.removeMaterial(material.id)
+          // 删除成功后刷新列表
+          await fetchMaterials()
           ElMessage.success('删除成功')
         } else {
           ElMessage.error(response.msg || '删除失败')
@@ -325,10 +329,8 @@ const isImageFile = (filename) => {
 
 // 组件挂载时获取素材列表
 onMounted(() => {
-  // 只有store中没有数据时才获取
-  if (appStore.materials.length === 0) {
-    fetchMaterials()
-  }
+  // 每次挂载时都强制刷新，确保数据最新
+  fetchMaterials()
 })
 </script>
 

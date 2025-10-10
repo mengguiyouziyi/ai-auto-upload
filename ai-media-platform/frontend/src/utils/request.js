@@ -96,4 +96,5 @@ export const http = {
   }
 }
 
+export { request }
 export default request
