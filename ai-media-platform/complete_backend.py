@@ -2243,11 +2243,26 @@ async def post_video(request: Request, background_tasks: BackgroundTasks):
                                             # 构建完整的视频文件路径，匹配social-auto-upload格式
                                             video_file_path = str(Path(BASE_DIR) / "videoFile" / video_file)
 
+                                                    # 根据enableTimer设置正确的发布时间
+                                            publish_date = None
+                                            if enableTimer and enableTimer == 1:
+                                                # 使用定时发布，计算发布时间
+                                                from utils.files_times import generate_schedule_time_next_day
+                                                publish_datetimes = generate_schedule_time_next_day(
+                                                    len(sau_video_files), videos_per_day, daily_times, start_days
+                                                )
+                                                publish_date = publish_datetimes[0]  # 使用第一个文件的发布时间
+                                                print(f"📅 使用定时发布时间: {publish_date}")
+                                            else:
+                                                # 立即发布，使用当前时间
+                                                publish_date = datetime.now()
+                                                print(f"🚀 使用立即发布模式")
+
                                             douyin_uploader = DouYinVideo(
                                                 title=title,
                                                 file_path=video_file_path,
                                                 tags=tags,
-                                                publish_date=datetime.now(),
+                                                publish_date=publish_date,
                                                 account_file=account_file_path
                                             )
                                             await asyncio.get_event_loop().run_in_executor(
@@ -2257,13 +2272,7 @@ async def post_video(request: Request, background_tasks: BackgroundTasks):
                                     except Exception as video_error:
                                         print(f"❌ 视频发布失败: {video_file} - {str(video_error)}")
                                         raise video_error
-                                else:
-                                    # 回退到旧版本
-                                    await asyncio.get_event_loop().run_in_executor(
-                                        None, post_video_DouYin, title, sau_video_files, tags,
-                                        sau_account_files, category, enableTimer, videos_per_day, daily_times, start_days
-                                    )
-                            print(f"✅ {platform_name} 发布执行完成")
+                                print(f"✅ {platform_name} 发布执行完成")
                         except Exception as publish_error:
                             print(f"❌ {platform_name} 发布执行失败: {str(publish_error)}")
                             import traceback
