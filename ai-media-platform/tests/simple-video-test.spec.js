@@ -75,7 +75,7 @@ test('直接测试视频生成API', async ({ page }) => {
   console.log('尝试直接调用API...');
 
   await page.evaluate(() => {
-    return fetch('http://localhost:9001/api/v1/video/generate', {
+    return fetch('http://localhost:9000/api/v1/video/generate', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

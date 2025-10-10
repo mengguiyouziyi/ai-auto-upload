@@ -502,7 +502,7 @@ const tabs = reactive([
     selectedPlatform: 1, // 选中的平台（单选）
     title: '',
     selectedTopics: [], // 话题列表（不带#号）
-    scheduleEnabled: false, // 定时发布开关
+    scheduleEnabled: false, // 定时发布开关，默认关闭即立即发布
     videosPerDay: 1, // 每天发布视频数量
     dailyTimes: ['10:00'], // 每天发布时间点列表
     startDays: 0, // 从今天开始计算的发布天数，0表示明天，1表示后天

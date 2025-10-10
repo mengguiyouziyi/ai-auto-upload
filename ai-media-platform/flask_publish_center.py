@@ -700,4 +700,4 @@ if __name__ == '__main__':
     print(f"📡 API后端: Flask + social-auto-upload功能")
     print(f"🎨 前端界面: Vite构建的完整AI媒体平台")
     print(f"🔧 social-auto-upload模块: {'✅ 可用' if SOCIAL_AUTO_UPLOAD_AVAILABLE else '⚠️ 不可用'}")
-    app.run(host='0.0.0.0', port=9001, debug=True)
+    app.run(host='0.0.0.0', port=9000, debug=True)

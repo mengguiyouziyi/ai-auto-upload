@@ -66,7 +66,7 @@ test.describe('AI媒体智能平台测试', () => {
     let apiCallSuccess = false;
 
     page.on('response', async (response) => {
-      if (response.url().includes('localhost:9001')) {
+      if (response.url().includes('localhost:9000')) {
         const status = response.status();
         if (status === 200) {
           apiCallSuccess = true;
@@ -81,7 +81,7 @@ test.describe('AI媒体智能平台测试', () => {
     // 直接测试API连接
     try {
       const response = await page.evaluate(async () => {
-        const res = await fetch('http://localhost:9001/health');
+        const res = await fetch('http://localhost:9000/health');
         return { status: res.status, data: await res.json() };
       });
 

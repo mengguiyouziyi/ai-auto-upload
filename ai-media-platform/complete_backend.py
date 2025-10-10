@@ -74,6 +74,9 @@ COOKIE_STORAGE = BASE_DIR / "cookiesFile"
 # 发布任务存储
 publish_tasks: Dict[str, Dict] = {}
 
+# 重复发布检测存储 - 防止同一视频重复发布
+publishing_videos: Dict[str, str] = {}  # {video_path: task_id}
+
 # ==================== LLM服务配置 ====================
 try:
     from services.llm.llm_service import get_llm_service, LLMProvider
@@ -2002,6 +2005,26 @@ async def post_video(request: Request, background_tasks: BackgroundTasks):
         tags = data.get('tags')  # 注意：social-auto-upload中tags不是数组
         category = data.get('category')
         enableTimer = data.get('enableTimer')
+
+        # 重复发布检测 - 检查每个文件是否正在发布中
+        for file_name in file_list:
+            # 构建文件的完整路径
+            file_path = str((Path(__file__).parent / "videoFile" / file_name).resolve())
+
+            if file_path in publishing_videos:
+                existing_task_id = publishing_videos[file_path]
+                print(f"⚠️ 文件正在发布中，拒绝重复请求: {file_name}")
+                print(f"   已存在任务ID: {existing_task_id}")
+                return {
+                    "code": 409,
+                    "msg": f"文件 {file_name} 正在发布中，请勿重复提交。任务ID: {existing_task_id}",
+                    "data": None
+                }
+
+            # 标记该文件正在发布
+            task_id = str(uuid.uuid4())
+            publishing_videos[file_path] = task_id
+            print(f"📝 标记文件正在发布: {file_name} -> {task_id}")
         if category == 0:
             category = None
 
@@ -2036,7 +2059,6 @@ async def post_video(request: Request, background_tasks: BackgroundTasks):
             }
 
         # 验证文件是否存在
-        from pathlib import Path
         existing_files = []
         missing_files = []
 
@@ -2124,7 +2146,6 @@ async def post_video(request: Request, background_tasks: BackgroundTasks):
         # 调用实际的social-auto-upload发布功能
         try:
             import sys
-            from pathlib import Path
             import os
 
             current_dir = Path(__file__).parent
@@ -2323,11 +2344,20 @@ async def post_video(request: Request, background_tasks: BackgroundTasks):
         print(f"📋 发布报告: {publish_report}")
 
         # 使用social-auto-upload标准响应格式
-        return {
+        result = {
             "code": 200,
             "msg": None,
             "data": None
         }
+
+        # 清理重复发布检测记录（成功情况）
+        for file_name in file_list:
+            file_path = str((Path(__file__).parent / "videoFile" / file_name).resolve())
+            if file_path in publishing_videos:
+                del publishing_videos[file_path]
+                print(f"✅ 已清理发布检测记录: {file_name}")
+
+        return result
 
     except Exception as e:
         print(f"❌ 发布API调用失败: {str(e)}")
@@ -2339,6 +2369,14 @@ async def post_video(request: Request, background_tasks: BackgroundTasks):
             "msg": f"发布失败: {str(e)}",
             "data": None
         }
+    finally:
+        # 清理重复发布检测记录
+        for file_name in file_list:
+            # 使用全局Path变量，避免局部导入冲突
+            file_path = str((Path(__file__).parent / "videoFile" / file_name).resolve())
+            if file_path in publishing_videos:
+                del publishing_videos[file_path]
+                print(f"✅ 已清理发布检测记录: {file_name}")
 
 @app.post("/postVideoBatch")
 async def post_video_batch(request: Request):
@@ -2622,6 +2660,22 @@ async def publish_douyin(request: PublishRequest, background_tasks: BackgroundTa
     if not video_path.exists():
         raise HTTPException(status_code=404, detail=f"视频文件不存在: {request.video_path}")
 
+    # 重复发布检测 - 防止同一视频重复发布
+    video_path_str = str(video_path.resolve())
+    if video_path_str in publishing_videos:
+        existing_task_id = publishing_videos[video_path_str]
+        existing_task = publish_tasks.get(existing_task_id)
+
+        # 如果现有任务还在进行中（pending或uploading状态），拒绝重复发布
+        if existing_task and existing_task["status"] in ["pending", "uploading"]:
+            raise HTTPException(
+                status_code=409,
+                detail=f"该视频正在发布中，请勿重复提交。任务ID: {existing_task_id}"
+            )
+
+    # 标记该视频正在发布
+    publishing_videos[video_path_str] = task_id
+
     # 获取账号文件
     try:
         account_file = get_account_file(request.account_id or request.account_file)
@@ -2778,6 +2832,12 @@ async def execute_douyin_publish(task_id: str):
 
         print(f"抖音发布任务 {task_id} 执行成功")
 
+        # 清理重复发布检测记录
+        video_path_str = task_info.get("video_path", "")
+        if video_path_str and video_path_str in publishing_videos:
+            del publishing_videos[video_path_str]
+            print(f"✅ 已清理发布检测记录: {video_path_str}")
+
     except Exception as e:
         # 任务失败
         task_info["status"] = "failed"
@@ -2786,6 +2846,12 @@ async def execute_douyin_publish(task_id: str):
         task_info["updated_at"] = datetime.now()
 
         print(f"抖音发布任务 {task_id} 执行失败: {e}")
+
+        # 清理重复发布检测记录（即使失败也要清理，允许重新尝试）
+        video_path_str = task_info.get("video_path", "")
+        if video_path_str and video_path_str in publishing_videos:
+            del publishing_videos[video_path_str]
+            print(f"✅ 已清理发布检测记录: {video_path_str}（任务失败）")
 
 
 # 初始化数据库
