@@ -56,16 +56,20 @@
               />
             </el-form-item>
 
-            <el-form-item label="视频Prompt编辑">
+            <el-form-item label="AI优化提示词">
               <div class="prompt-editor">
                 <div class="prompt-header">
-                  <span class="prompt-label">优化后的Prompt（将用于视频生成）</span>
+                  <span class="prompt-label">自定义GLM模型优化提示词（可修改默认提示词）</span>
                   <div class="prompt-actions">
                     <el-button size="small" @click="showPromptTemplates = !showPromptTemplates">
                       <el-icon><Collection /></el-icon>
                       {{ showPromptTemplates ? '隐藏' : '显示' }}模板
                     </el-button>
-                    <el-button size="small" @click="clearPrompt" v-if="videoPrompt">
+                    <el-button size="small" @click="resetPrompt" v-if="aiOptimizePrompt">
+                      <el-icon><RefreshRight /></el-icon>
+                      重置
+                    </el-button>
+                    <el-button size="small" @click="clearPrompt" v-if="aiOptimizePrompt">
                       <el-icon><Delete /></el-icon>
                       清空
                     </el-button>
@@ -73,11 +77,11 @@
                 </div>
 
                 <el-input
-                  v-model="videoPrompt"
+                  v-model="aiOptimizePrompt"
                   type="textarea"
-                  :rows="6"
-                  placeholder="编辑用于视频生成的Prompt，系统会自动优化使场景首尾相接..."
-                  maxlength="1000"
+                  :rows="8"
+                  placeholder="请输入用于指导GLM模型优化文本的提示词..."
+                  maxlength="2000"
                   show-word-limit
                   class="prompt-textarea"
                 />
@@ -85,16 +89,16 @@
                 <!-- Prompt模板选择 -->
                 <div v-if="showPromptTemplates" class="prompt-templates">
                   <div class="templates-header">
-                    <span>快速选择Prompt模板：</span>
+                    <span>快速选择提示词模板：</span>
                   </div>
                   <div class="templates-grid">
                     <el-button
-                      v-for="template in promptTemplates"
+                      v-for="template in aiPromptTemplates"
                       :key="template.name"
                       size="small"
                       type="info"
                       plain
-                      @click="applyTemplate(template)"
+                      @click="applyAiTemplate(template)"
                       class="template-btn"
                     >
                       {{ template.name }}
@@ -179,7 +183,7 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { EditPen, Tools, CopyDocument, Delete, Clock, Download, VideoPlay, Collection } from '@element-plus/icons-vue'
+import { EditPen, Tools, CopyDocument, Delete, Clock, Download, VideoPlay, Collection, RefreshRight } from '@element-plus/icons-vue'
 import { http } from '@/utils/request'
 
 const router = useRouter()
@@ -187,6 +191,7 @@ const loading = ref(false)
 const result = ref(null)
 const history = ref([])
 const videoPrompt = ref('')
+const aiOptimizePrompt = ref('')
 const showPromptTemplates = ref(false)
 
 const form = reactive({
@@ -194,7 +199,31 @@ const form = reactive({
   text: ''
 })
 
-// Prompt模板
+// AI优化提示词模板
+const aiPromptTemplates = ref([
+  {
+    name: '通用文案优化',
+    prompt: '你是一个专业的文案优化师。请将以下原始文案进行优化，使其更加生动、吸引人且适合视频创作。要求：\n1. 保持原意不变\n2. 增强表现力和感染力\n3. 适合口头表达和视频展示\n4. 控制在合适的长度\n\n原始文案：{original_text}\n\n请提供优化后的文案：'
+  },
+  {
+    name: '短视频优化',
+    prompt: '你是一个专业的短视频内容创作者。请将以下文案优化为适合短视频平台的版本：\n1. 开头要有吸引力\n2. 语言简洁有力\n3. 容易理解和记忆\n4. 具有一定的传播性\n\n原始文案：{original_text}\n\n请提供短视频优化版本：'
+  },
+  {
+    name: '故事化表达',
+    prompt: '你是一个擅长故事化表达的文案专家。请将以下内容转化为生动的故事形式：\n1. 增加故事性和画面感\n2. 用具体的场景和细节\n3. 创造情感共鸣\n4. 使内容更具感染力\n\n原始内容：{original_text}\n\n请提供故事化版本：'
+  },
+  {
+    name: '营销文案',
+    prompt: '你是一个营销文案专家。请将以下内容优化为具有营销吸引力的文案：\n1. 突出核心卖点\n2. 增加紧迫感和吸引力\n3. 使用有说服力的语言\n4. 引导用户行动\n\n原始内容：{original_text}\n\n请提供营销文案版本：'
+  },
+  {
+    name: '知识分享',
+    prompt: '你是一个知识分享领域的文案专家。请将以下内容优化为易于理解和传播的知识分享文案：\n1. 简化复杂概念\n2. 增加实用性\n3. 结构清晰\n4. 便于记忆和分享\n\n原始内容：{original_text}\n\n请提供知识分享版本：'
+  }
+])
+
+// Prompt模板（视频生成用）
 const promptTemplates = ref([
   {
     name: '科技开场',
@@ -247,10 +276,17 @@ const optimizeText = async () => {
 
   loading.value = true
   try {
-    const response = await http.post('/api/v1/llm/optimize-text', {
+    const requestData = {
       text: form.text,
       provider: form.provider
-    })
+    }
+
+    // 如果有自定义提示词，添加到请求中
+    if (aiOptimizePrompt.value.trim()) {
+      requestData.custom_prompt = aiOptimizePrompt.value
+    }
+
+    const response = await http.post('/api/v1/llm/optimize-text', requestData)
 
     result.value = response.data || response
     history.value.unshift({
@@ -271,16 +307,33 @@ const optimizeText = async () => {
   }
 }
 
-// 应用Prompt模板
+// 应用AI优化提示词模板
+const applyAiTemplate = (template) => {
+  aiOptimizePrompt.value = template.prompt
+  ElMessage.success(`已应用模板: ${template.name}`)
+}
+
+// 应用视频Prompt模板
 const applyTemplate = (template) => {
   videoPrompt.value = template.prompt
   ElMessage.success(`已应用模板: ${template.name}`)
 }
 
+// 重置AI优化提示词
+const resetPrompt = () => {
+  aiOptimizePrompt.value = getDefaultAiPrompt()
+  ElMessage.success('已重置为默认提示词')
+}
+
 // 清空Prompt
 const clearPrompt = () => {
-  videoPrompt.value = ''
-  ElMessage.success('已清空视频Prompt')
+  aiOptimizePrompt.value = ''
+  ElMessage.success('已清空AI优化提示词')
+}
+
+// 获取默认AI优化提示词
+const getDefaultAiPrompt = () => {
+  return '你是一个专业的文案优化师。请将以下原始文案进行优化，使其更加生动、吸引人且适合视频创作。\n\n要求：\n1. 保持原意不变\n2. 增强表现力和感染力\n3. 使语言更加流畅自然\n4. 适合口头表达和视频展示\n5. 控制在合适的长度\n\n原始文案：{original_text}\n\n请提供优化后的文案：'
 }
 
 const copyResult = () => {
@@ -339,6 +392,11 @@ onMounted(() => {
   const savedHistory = localStorage.getItem('text-optimize-history')
   if (savedHistory) {
     history.value = JSON.parse(savedHistory)
+  }
+
+  // 初始化默认AI优化提示词
+  if (!aiOptimizePrompt.value) {
+    aiOptimizePrompt.value = getDefaultAiPrompt()
   }
 })
 

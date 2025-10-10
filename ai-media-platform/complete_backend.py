@@ -659,9 +659,11 @@ class TextOptimizeService:
             }
         }
 
-    async def optimize_text(self, text: str, provider: str = "glm"):
+    async def optimize_text(self, text: str, provider: str = "glm", custom_prompt: str = ""):
         """优化文本 - 使用真实LLM API"""
         print(f"收到文本优化请求: provider={provider}, text={text[:50]}...")
+        if custom_prompt:
+            print(f"使用自定义提示词: {custom_prompt[:100]}...")
 
         try:
             # 检查LLM服务是否可用
@@ -692,8 +694,24 @@ class TextOptimizeService:
 
             llm_provider = provider_map.get(provider, LLMProvider.GLM)
 
-            # 调用真实的LLM文本优化
-            optimized_text = await llm_service.optimize_text_for_video(text, llm_provider)
+            # 如果有自定义提示词，使用通用LLM生成方法；否则使用专门的视频优化方法
+            if custom_prompt:
+                # 使用自定义提示词进行优化
+                from services.llm.llm_service import LLMRequest, Message
+                # 构建消息列表，将自定义提示词作为用户消息
+                full_prompt = custom_prompt.replace("{original_text}", text)
+                messages = [
+                    Message(role="user", content=full_prompt)
+                ]
+                request = LLMRequest(
+                    messages=messages,
+                    provider=llm_provider
+                )
+                response = await llm_service.generate_text(request)
+                optimized_text = response.content
+            else:
+                # 调用真实的LLM文本优化（视频优化模式）
+                optimized_text = await llm_service.optimize_text_for_video(text, llm_provider)
 
             print(f"✅ LLM文本优化完成")
 
@@ -1127,6 +1145,7 @@ async def optimize_text(request: dict):
     try:
         text = request.get("text", "")
         provider = request.get("provider", "glm")
+        custom_prompt = request.get("custom_prompt", "")
 
         if not text:
             return {
@@ -1134,7 +1153,7 @@ async def optimize_text(request: dict):
                 "message": "文本内容不能为空"
             }
 
-        result = await text_optimize_service.optimize_text(text, provider)
+        result = await text_optimize_service.optimize_text(text, provider, custom_prompt)
 
         if result:
             return {
