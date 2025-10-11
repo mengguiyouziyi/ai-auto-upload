@@ -114,17 +114,16 @@
             <el-upload
               class="video-upload"
               drag
-              :auto-upload="true"
-              :action="`${apiBaseUrl}/upload`"
-              :on-success="(response, file) => handleUploadSuccess(response, file, currentUploadTab)"
-              :on-error="handleUploadError"
+              :auto-upload="false"
+              :on-change="handleFileChange"
+              :on-remove="handleFileRemove"
               multiple
               accept="video/*"
-              :headers="authHeaders"
+              :file-list="currentUploadFiles"
             >
               <el-icon class="el-icon--upload"><Upload /></el-icon>
               <div class="el-upload__text">
-                将视频文件拖到此处，或<em>点击上传</em>
+                将视频文件拖到此处，或<em>点击选择文件</em>
               </div>
               <template #tip>
                 <div class="el-upload__tip">
@@ -132,6 +131,18 @@
                 </div>
               </template>
             </el-upload>
+
+            <div class="upload-dialog-footer" style="margin-top: 20px; text-align: right;">
+              <el-button @click="localUploadVisible = false">取消</el-button>
+              <el-button
+                type="primary"
+                @click="confirmUpload"
+                :disabled="currentUploadFiles.length === 0"
+                :loading="uploading"
+              >
+                确定 ({{ currentUploadFiles.length }})
+              </el-button>
+            </div>
           </el-dialog>
 
           <!-- 批量发布进度对话框 -->
@@ -476,6 +487,8 @@ const localUploadVisible = ref(false)
 const materialLibraryVisible = ref(false)
 const currentUploadTab = ref(null)
 const selectedMaterials = ref([])
+const currentUploadFiles = ref([])
+const uploading = ref(false)
 const materials = computed(() => appStore.materials)
 
 // 批量发布相关状态
@@ -612,6 +625,83 @@ const handleUploadSuccess = (response, file, tab) => {
 const handleUploadError = (error) => {
   ElMessage.error('文件上传失败')
   console.error('上传错误:', error)
+}
+
+// 处理文件选择变更
+const handleFileChange = (file, fileList) => {
+  currentUploadFiles.value = fileList
+  console.log('选择的文件:', file.name)
+}
+
+// 处理文件移除
+const handleFileRemove = (file, fileList) => {
+  currentUploadFiles.value = fileList
+}
+
+// 确认上传
+const confirmUpload = async () => {
+  if (currentUploadFiles.value.length === 0) {
+    ElMessage.warning('请选择要上传的文件')
+    return
+  }
+
+  uploading.value = true
+
+  try {
+    // 上传所有选择的文件
+    for (const fileItem of currentUploadFiles.value) {
+      const formData = new FormData()
+      formData.append('file', fileItem.raw)
+
+      try {
+        const response = await http.upload('/uploadSave', formData)
+
+        if (response.code === 200 && currentUploadTab.value) {
+          // 获取文件路径
+          const filePath = response.data.filepath || response.data.path || response.data
+          // 从路径中提取文件名
+          const filename = filePath.split('/').pop()
+
+          // 保存文件信息到fileList
+          const fileInfo = {
+            name: fileItem.name,
+            url: materialApi.getMaterialPreviewUrl(filename),
+            path: filePath,
+            size: fileItem.size,
+            type: fileItem.type
+          }
+
+          // 添加到当前tab的文件列表
+          currentUploadTab.value.fileList.push(fileInfo)
+
+          // 更新显示列表
+          currentUploadTab.value.displayFileList = [...currentUploadTab.value.fileList.map(item => ({
+            name: item.name,
+            url: item.url
+          }))]
+
+          console.log('文件上传成功:', fileInfo)
+        }
+      } catch (error) {
+        console.error('上传文件失败:', fileItem.name, error)
+        ElMessage.error(`上传 ${fileItem.name} 失败`)
+      }
+    }
+
+    ElMessage.success('文件上传完成')
+
+    // 清空当前上传文件列表
+    currentUploadFiles.value = []
+
+    // 关闭对话框
+    localUploadVisible.value = false
+
+  } catch (error) {
+    console.error('批量上传失败:', error)
+    ElMessage.error('上传失败，请重试')
+  } finally {
+    uploading.value = false
+  }
 }
 
 // 删除已上传文件
