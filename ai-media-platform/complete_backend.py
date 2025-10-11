@@ -724,6 +724,8 @@ class TextOptimizeService:
 
         except Exception as e:
             print(f"❌ LLM文本优化失败: {str(e)}")
+            import traceback
+            print(f"❌ 详细错误信息: {traceback.format_exc()}")
             print(f"🔄 回退到模拟优化...")
 
             # 回退到模拟优化
