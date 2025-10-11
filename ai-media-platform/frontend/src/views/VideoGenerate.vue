@@ -218,6 +218,10 @@
                 <el-icon><Download /></el-icon>
                 下载视频
               </el-button>
+              <el-button type="success" @click="addToMaterialLibrary" :loading="addToMaterialLoading">
+                <el-icon><FolderAdd /></el-icon>
+                添加到素材库
+              </el-button>
               <el-button @click="useVideoForSocial">
                 <el-icon><Share /></el-icon>
                 发布到社交平台
@@ -266,8 +270,9 @@
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { VideoPlay, Tools, Download, Share, Clock, Document, Link } from '@element-plus/icons-vue'
+import { VideoPlay, Tools, Download, Share, Clock, Document, Link, FolderAdd } from '@element-plus/icons-vue'
 import { http } from '@/utils/request'
+import { useRouter } from 'vue-router'
 
 const loading = ref(false)
 const result = ref(null)
@@ -277,6 +282,8 @@ const progressText = ref('')
 const elapsedTime = ref(0)
 const videoHistory = ref([])
 const showPromptTemplates = ref(false)
+const addToMaterialLoading = ref(false)
+const router = useRouter()
 
 // 场景首尾相接的prompt模板
 const promptTemplates = ref([
@@ -520,40 +527,6 @@ const useVideoForSocial = () => {
   }
 }
 
-// 添加视频到素材库
-const addToMaterialLibrary = async (videoData) => {
-  try {
-    const videoUrl = getVideoUrl(videoData)
-    if (!videoUrl) {
-      ElMessage.error('视频链接无效')
-      return
-    }
-
-    // 下载视频文件
-    const response = await fetch(videoUrl)
-    const blob = await response.blob()
-    const file = new File([blob], `ai_video_${Date.now()}.webp`, { type: 'video/webp' })
-
-    // 创建FormData上传到素材库
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('filename', `AI视频_${new Date().toLocaleString()}.webp`)
-
-    const uploadResponse = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:9000'}/uploadSave`, {
-      method: 'POST',
-      body: formData
-    })
-
-    if (uploadResponse.ok) {
-      ElMessage.success('视频已添加到素材库')
-    } else {
-      throw new Error('上传到素材库失败')
-    }
-  } catch (error) {
-    console.error('添加到素材库失败:', error)
-    ElMessage.error('添加到素材库失败，请手动上传')
-  }
-}
 
 const previewVideo = (video) => {
   result.value = video
@@ -571,6 +544,58 @@ const formatTime = (seconds) => {
   const mins = Math.floor(seconds / 60)
   const secs = seconds % 60
   return `${mins}:${secs.toString().padStart(2, '0')}`
+}
+
+// 添加到素材库函数
+const addToMaterialLibrary = async () => {
+  if (!result.value) {
+    ElMessage.warning('没有可添加的视频')
+    return
+  }
+
+  addToMaterialLoading.value = true
+
+  try {
+    const videoUrl = getVideoUrl(result.value)
+    if (!videoUrl) {
+      ElMessage.error('视频链接无效')
+      return
+    }
+
+    console.log('🎬 开始添加到素材库:', videoUrl)
+    alert(`步骤1: 视频URL = ${videoUrl}`)
+
+    // 从视频URL中提取文件名
+    // 例如: http://localhost:9000/api/v1/video/file/wan_video_c9e14c10_00001_.mp4
+    const urlParts = videoUrl.split('/')
+    const videoFilename = urlParts[urlParts.length - 1]
+    alert(`步骤2: 提取的文件名 = ${videoFilename}`)
+
+    console.log('📤 调用后端接口添加视频到素材库...')
+
+    const responseData = await http.post('/addVideoToMaterial', {
+      video_filename: videoFilename,
+      custom_name: `AI视频_${new Date().toLocaleString().replace(/[\/:]/g, '_')}.mp4`
+    })
+
+    console.log('✅ 添加成功:', responseData)
+    alert('步骤3: 视频已成功添加到素材库!')
+
+    ElMessage.success('视频已成功添加到素材库')
+
+    // 延迟1秒后跳转到素材管理页面
+    setTimeout(() => {
+      console.log('🔗 跳转到素材管理页面...')
+      router.push('/material-management')
+    }, 1000)
+
+  } catch (error) {
+    console.error('添加到素材库失败:', error)
+    alert(`错误: ${error.message}`)
+    ElMessage.error('添加到素材库失败，请手动上传')
+  } finally {
+    addToMaterialLoading.value = false
+  }
 }
 
 // 获取视频提供商信息

@@ -1570,6 +1570,82 @@ async def upload_save(request: Request):
             "data": None
         }, status_code=500)
 
+@app.post("/addVideoToMaterial")
+async def add_video_to_material(request: Request):
+    """将生成的视频直接添加到素材库"""
+    try:
+        # 获取请求数据
+        data = await request.json()
+        video_filename = data.get('video_filename')  # 视频文件名，如 wan_video_c9e14c10_00001_.mp4
+        from datetime import datetime
+        # 使用安全的文件名格式，避免使用斜杠
+        safe_timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+        custom_name = data.get('custom_name', f'AI视频_{safe_timestamp}.mp4')
+
+        if not video_filename:
+            return JSONResponse({
+                "code": 400,
+                "msg": "视频文件名不能为空",
+                "data": None
+            }, status_code=400)
+
+        # 查找视频文件在generated_videos目录中
+        source_video_path = LOCAL_VIDEO_DIR / video_filename
+        if not source_video_path.exists():
+            return JSONResponse({
+                "code": 404,
+                "msg": f"视频文件不存在: {video_filename}",
+                "data": None
+            }, status_code=404)
+
+        # 确定目标目录
+        upload_dir = Path("videoFile")
+        upload_dir.mkdir(exist_ok=True)
+
+        # 生成唯一的文件名
+        import uuid
+        unique_id = str(uuid.uuid4())[:8]
+        target_filename = f"{unique_id}_{custom_name}"
+        target_path = upload_dir / target_filename
+
+        # 复制文件到素材库
+        import shutil
+        shutil.copy2(source_video_path, target_path)
+
+        # 计算文件大小
+        file_size_mb = round(float(target_path.stat().st_size) / (1024 * 1024), 2)
+
+        # 保存到数据库
+        db_path = Path("accounts.db")
+        if db_path.exists():
+            import sqlite3
+            with sqlite3.connect(db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    INSERT INTO file_records (filename, filesize, file_path, upload_time)
+                    VALUES (?, ?, ?, ?)
+                ''', (custom_name, file_size_mb, target_filename, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+                conn.commit()
+                print(f"✅ 视频已添加到素材库: {custom_name}")
+
+        return JSONResponse({
+            "code": 200,
+            "msg": "视频已成功添加到素材库",
+            "data": {
+                "filename": custom_name,
+                "filesize": file_size_mb,
+                "file_path": target_filename
+            }
+        })
+
+    except Exception as e:
+        print(f"❌ 添加视频到素材库失败: {str(e)}")
+        return JSONResponse({
+            "code": 500,
+            "msg": f"添加失败: {str(e)}",
+            "data": None
+        }, status_code=500)
+
 @app.get("/deleteFile")
 async def delete_file(request: Request):
     """删除文件 - 完全兼容social-auto-upload实现"""
