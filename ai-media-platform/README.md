@@ -1,164 +1,206 @@
-# 🚀 AI媒体智能平台
+# 🎯 AI媒体平台
 
-一个集成多种AI能力的媒体内容生成平台，支持LLM文本处理、TTS语音合成、文生图、文生视频、语音识别等功能。
+一个基于FastAPI和Vue.js的现代化AI媒体内容创作与发布平台，集成视频生成、内容优化、多平台发布等功能。
 
-## 🎯 系统架构
+## ✨ 核心功能
 
-### 📁 目录结构
-```
-ai-media-platform/
-├── backend/              # FastAPI后端服务
-├── frontend/             # Web前端界面
-├── services/             # AI服务模块
-│   ├── llm/             # 大语言模型服务
-│   ├── tts/             # 语音合成服务
-│   ├── image-generation/ # 文生图服务
-│   ├── video-generation/ # 文生视频服务
-│   └── voice-recognition/ # 语音识别服务
-├── config/              # 配置文件
-├── logs/                # 日志文件
-├── temp/                # 临时文件
-└── tests/               # 测试文件
-```
+- 🤖 **AI视频生成**: 支持多种AI模型生成高质量视频内容
+- 📝 **文本优化**: 使用大语言模型优化内容和标题
+- 🎬 **素材管理**: 完整的媒体文件管理系统
+- 📱 **多平台发布**: 支持抖音、B站、小红书等主流平台
+- 🎨 **现代化界面**: 基于Element Plus的响应式UI设计
+- 🔄 **实时状态**: WebSocket实时任务状态更新
 
-## 🔌 集成的AI服务
+## 🏗️ 技术架构
 
-### 🤖 LLM文本处理
-- **豆包API**: 字节跳动大语言模型
-- **文心一言API**: 百度大语言模型
-- **OpenAI API**: GPT系列模型
-- **功能**: 文本改写、优化、剧本生成
+### 后端技术栈
+- **FastAPI**: 高性能Python Web框架
+- **Uvicorn**: ASGI服务器
+- **SQLite**: 轻量级数据库
+- **Pydantic**: 数据验证和序列化
 
-### 🗣️ TTS语音合成
-- **Azure TTS**: 微软语音服务
-- **阿里云TTS**: 阿里语音合成
-- **腾讯云TTS**: 腾讯语音服务
-- **功能**: 文本转语音，多种音色选择
+### 前端技术栈
+- **Vue 3**: 渐进式JavaScript框架
+- **Vite**: 快速构建工具
+- **Element Plus**: Vue 3 UI组件库
+- **Axios**: HTTP客户端
+- **Pinia**: 状态管理
 
-### 🎨 文生图服务
-- **Stable Diffusion**: 开源图像生成
-- **Midjourney API**: 商业图像生成
-- **DALL-E API**: OpenAI图像生成
-- **功能**: 文本描述生成高质量图像
-
-### 🎬 文生视频服务
-- **Runway ML API**: 商业视频生成
-- **Pika Labs API**: AI视频创作
-- **Stable Video Diffusion**: 开源视频生成
-- **豆包/文心视频**: 国内大模型视频生成
-- **功能**: 文本转视频，多种风格选择
-
-### 🎤 语音识别
-- **Whisper API**: OpenAI语音转文本
-- **Azure Speech**: 微软语音识别
-- **百度语音**: 中文语音识别
-- **功能**: 音频转文本，多语言支持
+### AI集成
+- **OpenAI GPT**: 文本生成和优化
+- **GLM系列**: 智谱AI语言模型
+- **ComfyUI**: 视频生成工作流
+- **多种视频模型**: 支持不同风格的视频生成
 
 ## 🚀 快速开始
 
-### 1. 环境配置
+### 一键启动
 ```bash
-# 创建虚拟环境
-python3 -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+./start-dev.sh
+```
 
-# 安装依赖
+### 手动启动
+```bash
+# 1. 启动后端
+source venv/bin/activate
+python complete_backend.py
+
+# 2. 启动前端 (新终端)
+cd frontend
+npm run dev
+```
+
+### 访问地址
+- 🎨 **前端界面**: http://localhost:5174
+- 🔌 **后端API**: http://localhost:9000
+- 📚 **API文档**: http://localhost:9000/docs
+
+## 📁 项目结构
+
+```
+ai-media-platform/
+├── complete_backend.py          # 主后端服务入口
+├── requirements.txt             # Python依赖列表
+├── backend/                     # 后端核心模块
+│   ├── routes/                  # API路由
+│   ├── services/                # 业务逻辑服务
+│   └── ...                      # 其他后端模块
+├── frontend/                    # 前端Vue应用
+│   ├── src/                     # Vue源代码
+│   ├── package.json             # 前端依赖配置
+│   └── dist/                    # 构建输出目录
+├── services/                    # 共享服务模块
+├── config/                      # 配置文件
+├── venv/                        # Python虚拟环境
+├── *.db                         # SQLite数据库文件
+├── start-dev.sh                 # 开发环境启动脚本
+├── stop-services.sh             # 服务停止脚本
+├── health-check.sh              # 健康检查脚本
+├── ecosystem.config.js          # PM2生产环境配置
+├── .env.example                 # 环境变量模板
+├── DEPLOYMENT.md                # 详细部署文档
+├── QUICK_START.md               # 快速开始指南
+└── README.md                    # 项目说明文档
+```
+
+## 🛠️ 开发指南
+
+### 环境要求
+- Python 3.13+
+- Node.js 18+
+- npm 或 yarn
+
+### 依赖安装
+```bash
+# 后端依赖
+source venv/bin/activate
 pip install -r requirements.txt
+
+# 前端依赖
+cd frontend
+npm install
 ```
 
-### 2. 配置API密钥
+### 环境配置
 ```bash
-# 复制配置文件
-cp config/config.example.yaml config/config.yaml
+# 复制环境变量模板
+cp .env.example .env
 
-# 编辑配置文件，添加你的API密钥
-vim config/config.yaml
+# 编辑配置文件
+vim .env
 ```
 
-### 3. 启动服务
+### 开发工具脚本
+- `./start-dev.sh` - 一键启动开发环境
+- `./stop-services.sh` - 停止所有服务
+- `./health-check.sh` - 健康状态检查
+
+## 📚 文档
+
+- 📖 **[详细部署文档](./DEPLOYMENT.md)** - 完整的部署和配置指南
+- ⚡ **[快速开始指南](./QUICK_START.md)** - 简化的启动步骤
+- 🔧 **[API文档](http://localhost:9000/docs)** - 后端API接口文档
+
+## 🌐 服务端口
+
+| 服务 | 端口 | 说明 |
+|------|------|------|
+| 前端开发服务器 | 5174 | Vue.js开发环境 |
+| 后端API服务 | 9000 | FastAPI服务 |
+| API文档 | 9000/docs | Swagger交互式文档 |
+| 健康检查 | 9000/health | 服务状态检查 |
+
+## 🔧 生产环境部署
+
+### 使用PM2
 ```bash
-# 启动后端服务
-python backend/main.py
+# 安装PM2
+npm install -g pm2
 
-# 启动前端服务
-cd frontend && npm run dev
+# 启动生产服务
+pm2 start ecosystem.config.js
+
+# 查看状态
+pm2 status
 ```
 
-### 4. 访问界面
-- 前端界面: http://localhost:3000
-- API文档: http://localhost:8000/docs
-- 监控面板: http://localhost:8000/admin
-
-## 📊 功能特性
-
-### 🎯 媒体内容生成流程
-1. **文本输入**: 用户输入原始文本或上传文档
-2. **LLM处理**: 使用大模型优化和改写文本
-3. **内容分割**: 自动分割为适合的视频场景
-4. **多媒体生成**: 并行生成图像、视频、音频
-5. **智能合成**: 自动合成最终媒体内容
-
-### 🔧 核心功能
-- ✅ 批量文章处理
-- ✅ 智能文本优化
-- ✅ 多模型并行处理
-- ✅ 实时进度监控
-- ✅ 质量自动评分
-- ✅ 云端存储集成
-- ✅ API接口调用
-- ✅ 用户权限管理
-
-## 🛠️ 技术栈
-
-### 后端技术
-- **FastAPI**: 高性能Web框架
-- **Celery**: 分布式任务队列
-- **Redis**: 缓存和消息队列
-- **PostgreSQL**: 主数据库
-- **Docker**: 容器化部署
-
-### 前端技术
-- **React**: 现代前端框架
-- **TypeScript**: 类型安全
-- **Ant Design**: UI组件库
-- **Zustand**: 状态管理
-- **Vite**: 构建工具
-
-### AI集成
-- **Transformers**: Hugging Face模型库
-- **Diffusers**: 图像/视频生成
-- **OpenAI SDK**: OpenAI API集成
-- **Azure SDK**: 微软服务集成
-
-## 📈 部署方案
-
-### 🏠 本地部署
-- 适用于开发和小规模使用
-- 支持CPU和GPU加速
-- 本地文件存储
-
-### ☁️ 云端部署
-- 支持AWS、阿里云、腾讯云
-- 自动扩缩容
-- 高可用架构
-- CDN加速
-
-### 🐳 Docker部署
+### 使用Docker (可选)
 ```bash
 # 构建镜像
 docker build -t ai-media-platform .
 
 # 运行容器
-docker run -p 8000:8000 -p 3000:3000 ai-media-platform
+docker run -p 9000:9000 -p 5174:5174 ai-media-platform
 ```
 
-## 📞 支持与反馈
+## 🧪 测试
 
-- 📧 邮箱: support@ai-media-platform.com
-- 💬 微信群: AI媒体技术交流
-- 🐛 问题反馈: GitHub Issues
-- 📖 文档: https://docs.ai-media-platform.com
+### 健康检查
+```bash
+./health-check.sh
+```
+
+### API测试
+```bash
+# 后端健康检查
+curl http://localhost:9000/health
+
+# 前端访问测试
+curl http://localhost:5174/
+```
+
+## 🐛 故障排除
+
+### 常见问题
+1. **端口被占用**: 运行 `./stop-services.sh`
+2. **虚拟环境问题**: 重新创建 `python -m venv venv`
+3. **依赖安装失败**: 清除缓存后重新安装
+
+### 日志查看
+- 开发环境: 直接查看终端输出
+- 生产环境: `pm2 logs ai-media-backend`
+
+## 🤝 贡献指南
+
+1. Fork 项目
+2. 创建功能分支 (`git checkout -b feature/AmazingFeature`)
+3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
+4. 推送到分支 (`git push origin feature/AmazingFeature`)
+5. 创建 Pull Request
 
 ## 📄 许可证
 
-MIT License - 详见 [LICENSE](LICENSE) 文件
+本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情
+
+## 📞 支持
+
+如有问题或建议，请：
+1. 查看 [DEPLOYMENT.md](./DEPLOYMENT.md) 故障排除部分
+2. 提交 Issue 描述问题
+3. 联系技术支持团队
+
+---
+
+**🎉 感谢使用AI媒体平台！**
+
+如果觉得这个项目有用，请给个 ⭐ Star！
